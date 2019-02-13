@@ -1,0 +1,51 @@
+# ati netft
+netft_ip_address: "192.168.1.1"
+netft_sensor_name: "netft"
+netft_frame_id: "end_effector"
+netft_publish_rate: 1000
+netft_print_flag: false
+netft_file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/netft_data.txt"
+
+ati:
+  offset: # will be added to the reading; in tool frame
+    fx: -3.06
+    fy: 0.929
+    fz: -0.787
+    tx: -0.0189
+    ty: 0.00609
+    tz: -0.0137
+  gravity:
+    x: 0.000882
+    y: 0.0531
+    z: -1.96
+  COM:
+    x: -0.000447
+    y: 0.000122
+    z: 0.0155
+  safety:
+    fx: 30 # maximum: 20
+    fy: 30 # maximum: 20
+    fz: 45 # maximum: 60
+    tx: 1.2 # maximum: 1
+    ty: 1.2 # maximum: 1
+    tz: 1.2 # maximum: 1
+
+# ABB EGM
+egm_portnum: 6510
+egm_max_dist_tran: 5 # mm, maximum distance between set point and current pose.
+egm_max_dist_rot: 0.05 # rad, maximum distance between set point and current pose.
+                      # This two numbers plus 'K' and bandwidth in robostudio determine
+                      # how fast the robot will move.
+egm_safety_mode: 1 # 0: none 1: truncate 2: stop
+egm_operation_mode: 0 # 0: cartesian 1: joint
+egm_print_flag: false
+egm_file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/egm_data.txt"
+egm_safety_zone:
+  xmin: -50
+  xmax: 220
+  ymin: 240
+  ymax: 450 # 550 for block tilting
+  zmin: 260
+  zmax: 600
+
+# force control
