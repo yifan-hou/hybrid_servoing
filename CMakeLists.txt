@@ -25,6 +25,7 @@ catkin_package(
 include_directories(
   include
   MatlabCodeGen/jac_phi_q_block_tilting
+  MatlabCodeGen/jac_phi_q_flip_against_corner
   ${catkin_INCLUDE_DIRS}
   /usr/include/eigen3
   ~/Git/ZZJHand/include/
@@ -40,6 +41,7 @@ target_link_libraries(HS_tasks
   /usr0/home/yifanh/Git/ZZJHand/build/libHand.so
   /usr0/home/yifanh/Git/cpplibrary/build/libTimerLinux.so
   ${CMAKE_SOURCE_DIR}/force_control_bridge_ros/MatlabCodeGen/jac_phi_q_block_tilting/jac_phi_q_block_tilting.a
+  ${CMAKE_SOURCE_DIR}/force_control_bridge_ros/MatlabCodeGen/jac_phi_q_flip_against_corner/jac_phi_q_flip_against_corner.a
 )
 
 

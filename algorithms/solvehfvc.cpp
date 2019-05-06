@@ -13,8 +13,7 @@ using Eigen::VectorXf;
 using Eigen::MatrixXf;
 
 
-bool solvehfvc(const MatrixXf &Omega,
-  const MatrixXf &Jac_phi_q_all,
+bool solvehfvc(const MatrixXf &N_ALL,
   const MatrixXf &G, const VectorXf &b_G,
   const VectorXf &F,
   const MatrixXf &Aeq, const VectorXf &beq,
@@ -24,34 +23,27 @@ bool solvehfvc(const MatrixXf &Omega,
   const int kNumSeeds,
   HFVC *action) {
 
-// function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(Omega, ...
-//         Jac_phi_q_all, G, b_G, F, Aeq, beq, A, b_A, dims, varargin)
-
   /* Size checking */
   const int kDimGeneralized = kDimActualized + kDimUnActualized;
-  assert(Omega.rows() == Jac_phi_q_all.cols()); // dim q
-  assert(Omega.cols() == kDimGeneralized);
-  assert(Jac_phi_q_all.rows() == kDimLambda + kDimSlidingFriction);
+  const int kDimContactForce = kDimLambda + kDimSlidingFriction;
+  assert(N_ALL.cols() == kDimGeneralized);
+  assert(N_ALL.rows() == kDimContactForce);
   assert(G.rows() == b_G.rows());
   assert(G.cols() == kDimGeneralized);
   assert(F.rows() == kDimGeneralized);
   if (kDimSlidingFriction > 0) {
     assert(Aeq.rows() == beq.rows());
-    assert(Aeq.cols() == kDimLambda + kDimGeneralized);
+    assert(Aeq.cols() == kDimContactForce + kDimGeneralized);
   }
   assert(A.rows() == b_A.rows());
-  assert(A.cols() == kDimLambda + kDimGeneralized);
-
-  MatrixXf Jac_phi_q;
-  Jac_phi_q = Jac_phi_q_all.topRows(kDimLambda);
+  assert(A.cols() == kDimContactForce + kDimGeneralized);
 
   cout << "Begin solving for velocity commands" << endl;
   cout << "  [1] Determine Possible Dimension of control" << endl;
 
-  MatrixXf N = Jac_phi_q*Omega;
+  MatrixXf N = N_ALL.topRows(kDimLambda);
   MatrixXf NG(N.rows()+G.rows(), N.cols());
   NG << N, G;
-
 
   // matrix decomposition
   Eigen::FullPivLU<MatrixXf> lu_decomp_N(N);
@@ -79,7 +71,7 @@ bool solvehfvc(const MatrixXf &Omega,
 
   cout << "  [2] Solving for Directions by PGD" << endl;
 
-  int NIter   = 300;
+  int NIter   = 50;
   int n_c     = rank_NG - kDimUnActualized;
   MatrixXf BB = basis_c.transpose()*basis_c;
   MatrixXf NN = basis_N*basis_N.transpose();
@@ -110,7 +102,7 @@ bool solvehfvc(const MatrixXf &Omega,
         costs -= k.col(i).transpose()*basis_c.transpose()*NN*basis_c*k.col(i);
       }
       // descent
-      k -= 1.0f*g;
+      k -= 10.0f*g;
       // project
       bck = basis_c*k;
       for (int i = 0; i < bck.cols(); i++) {
@@ -164,20 +156,19 @@ bool solvehfvc(const MatrixXf &Omega,
   MatrixXf H = MatrixXf::Zero(kDimUnActualized, kDimGeneralized);
   H.leftCols(kDimUnActualized) = MatrixXf::Identity(kDimUnActualized,
       kDimUnActualized);
-
   // Newton's laws
   MatrixXf T_inv = T.inverse();
   MatrixXf M_newton(kDimUnActualized+kDimGeneralized,
-      kDimGeneralized + kDimLambda);
+      kDimGeneralized + kDimContactForce);
   if (kDimSlidingFriction > 0) {
     M_newton.resize(kDimUnActualized+kDimGeneralized+Aeq.rows(),
-      kDimGeneralized);
-    M_newton << MatrixXf::Zero(kDimUnActualized, kDimLambda), H*T_inv,
-        T*Omega.transpose()*Jac_phi_q_all.transpose(),
+      kDimGeneralized + kDimContactForce);
+    M_newton << MatrixXf::Zero(kDimUnActualized, kDimContactForce), H*T_inv,
+        T*N_ALL.transpose(),
         MatrixXf::Identity(kDimGeneralized, kDimGeneralized), Aeq;
   } else {
-    M_newton << MatrixXf::Zero(kDimUnActualized, kDimLambda), H*T_inv,
-        T*Omega.transpose()*Jac_phi_q_all.transpose(),
+    M_newton << MatrixXf::Zero(kDimUnActualized, kDimContactForce), H*T_inv,
+        T*N_ALL.transpose(),
         MatrixXf::Identity(kDimGeneralized, kDimGeneralized);
   }
   VectorXf b_newton(M_newton.rows());
@@ -188,9 +179,9 @@ bool solvehfvc(const MatrixXf &Omega,
   }
 
   MatrixXf M_free(M_newton.rows(), M_newton.cols() - n_af);
-  M_free << M_newton.leftCols(kDimLambda+kDimUnActualized),
+  M_free << M_newton.leftCols(kDimContactForce+kDimUnActualized),
       M_newton.rightCols(n_av);
-  MatrixXf M_eta_af = M_newton.middleCols(kDimLambda+kDimUnActualized,
+  MatrixXf M_eta_af = M_newton.middleCols(kDimContactForce+kDimUnActualized,
       n_af);
 
   // prepare the QP
@@ -199,7 +190,7 @@ bool solvehfvc(const MatrixXf &Omega,
   //     CE^T x + ce0 = 0
   //     CI^T x + ci0 >= 0
   // variables: [free_force, dual_free_force, eta_af]
-  int n_free = kDimLambda + kDimUnActualized + n_av;
+  int n_free = kDimContactForce + kDimUnActualized + n_av;
   int n_dual_free = M_newton.rows();
   Eigen::VectorXd Gdiag = Eigen::VectorXd::Zero(n_free+n_dual_free+n_af);
   for (int i = 0; i < n_af; ++i) Gdiag(n_free+n_dual_free+i) = 1.0;
@@ -207,20 +198,20 @@ bool solvehfvc(const MatrixXf &Omega,
 
   Eigen::MatrixXd G0 = Gdiag.asDiagonal();
   Eigen::VectorXd g0 = Eigen::VectorXd::Zero(G0.rows());
-  // A_temp = [A(:, 1:kDimLambda), A(:, kDimLambda+1:end)*T_inv];
+  // A_temp = [A(:, 1:kDimContactForce), A(:, kDimContactForce+1:end)*T_inv];
   MatrixXf A_temp(A.rows(), A.cols());
-  A_temp << A.leftCols(kDimLambda), A.rightCols(kDimGeneralized)*T_inv;
+  A_temp << A.leftCols(kDimContactForce), A.rightCols(kDimGeneralized)*T_inv;
 
   // 0.5 x'Qx + f'x
   // Ax<b
-  // A_lambda_eta_u = A_temp(:, 1:kDimLambda+kDimUnActualized);
-  // A_eta_af = A_temp(:, kDimLambda+kDimUnActualized+1:kDimLambda+kDimUnActualized+n_af);
-  // A_eta_av = A_temp(:, kDimLambda+kDimUnActualized+n_af+1:end);
+  // A_lambda_eta_u = A_temp(:, 1:kDimContactForce+kDimUnActualized);
+  // A_eta_af = A_temp(:, kDimContactForce+kDimUnActualized+1:kDimContactForce+kDimUnActualized+n_af);
+  // A_eta_av = A_temp(:, kDimContactForce+kDimUnActualized+n_af+1:end);
   // qp.A = [A_lambda_eta_u A_eta_av zeros(size(A, 1), n_dual_free) A_eta_af];
   MatrixXf qpA(A.rows(), A.cols() + n_dual_free);
-  qpA << A_temp.leftCols(kDimLambda+kDimUnActualized),
+  qpA << A_temp.leftCols(kDimContactForce+kDimUnActualized),
       A_temp.rightCols(n_av), MatrixXf::Zero(A.rows(), n_dual_free),
-      A_temp.middleCols(kDimLambda+kDimUnActualized, n_af);
+      A_temp.middleCols(kDimContactForce+kDimUnActualized, n_af);
   VectorXf qpb = b_A;
 
   // Aeq x = beq
@@ -235,43 +226,23 @@ bool solvehfvc(const MatrixXf &Omega,
   qpbeq << VectorXf::Zero(n_free), b_newton;
 
   Eigen::VectorXd x = Eigen::VectorXd::Random(g0.rows());
-  // cout << "QP:" << endl;
-  // cout << "G0: " << G0 << endl;
-  // cout << "g0: " << g0 << endl;
-  // cout << "qpAeq: " << qpAeq << endl;
-  // cout << "qpbeq: " << qpbeq << endl;
-  // cout << "qpA: " << qpA << endl;
-  // cout << "qpb: " << qpb << endl;
   double cost = solve_quadprog(G0, g0,
       qpAeq.transpose().cast<double>(), -qpbeq.cast<double>(),
       -qpA.transpose().cast<double>(), qpb.cast<double>(), x);
 
-  Eigen::IOFormat OctaveFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
+  Eigen::IOFormat MatlabFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
       "]");
-  cout << "QP Solved. cost = " << cost << ". x = " << x.format(OctaveFmt)
-      << endl << endl;
+  cout << "  QP Solved. cost = " << cost << endl;
   // eta_af = x(n_free + n_dual_free + 1:end);
   VectorXf eta_af = x.segment(n_free+n_dual_free, n_af).cast<float>();
 
-
-  // check results
-  VectorXf vel_command(kDimActualized);
-  vel_command << VectorXf::Zero(n_af), w_av;
-  cout<< " World frame velocity: " << (R_a.inverse()*vel_command).format(OctaveFmt)
-      << endl;
-
-  VectorXf force_command(kDimActualized);
-  force_command << eta_af, VectorXf::Zero(n_av);
-  cout << "  World frame force: " << (R_a.inverse()*force_command).format(OctaveFmt)
-      << endl;
-
-  cout << "  Equality violation: " << (qpbeq - qpAeq*x.cast<float>()).norm()
+  cout << "   Equality violation: " << (qpbeq - qpAeq*x.cast<float>()).norm()
       << endl;
 
   VectorXf b_Ax = qpA*x.cast<float>() - qpb;
   float inequality_violation = 0;
   if (b_Ax.maxCoeff() > 0 ) inequality_violation = b_Ax.maxCoeff();
-  cout << "  Inequality violation: " << inequality_violation
+  cout << "   Inequality violation: " << inequality_violation
       << endl;
 
   action->n_av   = n_av;

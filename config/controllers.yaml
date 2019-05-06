@@ -2,37 +2,33 @@
 #       force control
 ###################################################
 main_loop_rate: 500
+force_touch_threshold: 2
 
-# controller
-Transform: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-force_controlled_dimensions: 3
-
-# Admittance control parameters
-# For each axis
-#   k: stiffness
-#   m: mass (kg)
-#   alpha: viscous friction
-# TODO(yifan) we need to be able to set these online
-AC_para_X: # first axis (if the axes are rotated)
-  k: 0
-  m: 2
-  alpha: 1500
-AC_para_Y: # second axis (if the axes are rotated)
-  k: 0
-  m: 3
-  alpha: 1500
-AC_para_Z: # third axis (if the axes are rotated)
-  k: 0
-  m: 3
-  alpha: 300
-AC_limit: 300.0 # (mm) magnitude limit of output  THIS WILL CREATE A BOUNDING BOX
+# Admittance control parameters for the pseudo spring-mass-damper system
+# Be careful with Trade-off between length and angle
+# Assume length is 0.1, then:
+#   stiffness for rotation should be multiplied with 0.1, so as to feel the same
+#   Inertia entries for rotation should be multiplied with 0.01
+#   Damping coefficient for rotation should be multiplied with 0.1
+# The following parameters are the diagonal elements of the 6x6 matrices
+#   Stiffness matrix as viewed in tool frame
+Stiffness_matrix_diag_elements: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+#   Inertia matrix as viewed in tool frame
+Inertia_matrix_diag_elements: [1, 1, 1, 0.005, 0.005, 0.005]
+#   Damping coefficient matrix as viewed in tool frame
+Damping_matrix_diag_elements: [5, 5, 5, 0.05, 0.05, 0.05]
 
 # Force control PID Gains
+# one set for translation, another set for rotation
 FC_gains:
-  IGain: 0.01 # 0.02
-  PGain: 0.0 #0.4
-  DGain: 0.00 #0.02
-FC_I_Limit: 20 # 50 Newton
+  IGainT: 0.02 # 0.02
+  PGainT: 0.5 #0.5
+  DGainT: 0.00 #0.00
+  IGainR: 0.02 # 0.02
+  PGainR: 0.5 #0.5
+  DGainR: 0.00 #0.00
+FC_I_Limit_T_6D: [50, 50, 50, 0.5, 0.5, 0.5] # Newton, N*m
+
 
 forcecontrol_print_flag: true
 forcecontrol_file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/forcecontrol_data.txt"
@@ -44,8 +40,8 @@ robot_bridge:
     default_pose: # when tool frame is set for probe
       x: 50 #40
       y: 416
-      z: 378
+      z: 390
       qw: 0
-      qx: 0.55187
-      qy: -0.83393
+      qx: 0.1951
+      qy: 0.9808
       qz: 0

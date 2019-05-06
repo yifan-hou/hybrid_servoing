@@ -6,9 +6,6 @@
 
 #include <Eigen/Geometry>
 
-// #include <forcecontrol/forcecontrol_hardware.h>
-// #include <forcecontrol/forcecontrol_controller.h>
-// #include <forcecontrol/utilities.h> // array operations
 #include "utilities.h"
 #include "hybrid_servoing_tasks.h"
 
@@ -28,6 +25,7 @@ using namespace Eigen;
 
 // parameters from parameter server
 int main_loop_rate;
+float force_touch_threshold;
 float default_pose[7];
 
 // other global variables
@@ -166,7 +164,7 @@ bool SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
         float torque_mag = sqrt(wrench[3]*wrench[3] +
                 wrench[4]*wrench[4] +
                 wrench[5]*wrench[5]);
-        if ((force_mag > 1.0f) || (torque_mag > 0.2f)) {
+        if ((force_mag > force_touch_threshold) || (torque_mag > 0.4f)) {
             cout << "[MoveUntilTouch] Touched!" << endl;
             break;
         }
@@ -353,6 +351,7 @@ bool SrvHybridServo(std_srvs::Empty::Request  &req,
     // Read
     // --------------------------------------------------------
     BlockTilting task(&robot, &controller);
+    // LeveringUp task(&robot, &controller);
     ROS_INFO("Reading pose from the file..\n");
 
     task.initialize(HYBRID_SERVO_FILE_PATH, main_loop_rate);
@@ -374,6 +373,10 @@ int main(int argc, char* argv[])
     hd.param(std::string("/main_loop_rate"), main_loop_rate, 500);
     if (!hd.hasParam("/main_loop_rate"))
         ROS_WARN_STREAM("Parameter [/main_loop_rate] not found, using default: " << main_loop_rate);
+
+    hd.param(std::string("/force_touch_threshold"), force_touch_threshold, 1.0f);
+    if (!hd.hasParam("/force_touch_threshold"))
+        ROS_WARN_STREAM("Parameter [/force_touch_threshold] not found, using default: " << force_touch_threshold);
 
     if (!hd.hasParam("/robot_bridge/default_pose"))
     {
