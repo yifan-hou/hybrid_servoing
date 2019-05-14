@@ -53,118 +53,75 @@ bool PlaneEngaging::initialize(const std::string& file_name,
 
 bool PlaneEngaging::run() {
   MatrixXd f_data, v_data;
-  f_data = MatrixXd::Zero(6, controller_->pool_size_);
-  v_data = MatrixXd::Zero(6, controller_->pool_size_);
+  f_data = MatrixXd::Zero(6, controller_->_pool_size);
+  v_data = MatrixXd::Zero(6, controller_->_pool_size);
 
   controller_->reset();
   Timer time;
   int N_TRJ_ = 1000;
   for (int fr = 0; fr < N_TRJ_; ++fr) {
     time.tic();
-    /* Get new measurements */
-    // already done in controller.update()
-
-    /* Update weights of data */
-
     /* Estimate Natural Constraints from pool of data */
-    for (int i = 0; i < controller_->f_queue_.size(); ++i) {
-      f_data.col(i) = controller_->f_queue_[i];
-      v_data.col(i) = controller_->v_queue_[i];
+    // get the weighted data
+    f_data = MatrixXd::Zero(6, controller_->_f_queue.size()); // debug: make sure the size does change
+    v_data = MatrixXd::Zero(6, controller_->_v_queue.size());
+    for (int i = 0; i < controller_->_f_queue.size(); ++i)
+      f_data.col(i) = controller_->_f_queue[i] * controller_->_f_weights[i];
+    for (int i = 0; i < controller_->_v_queue.size(); ++i)
+      v_data.col(i) = controller_->_v_queue[i] * controller_->_v_weights[i];
+    JacobiSVD<MatrixXd> svd_v(v_data, ComputeThinV);
+    MatrixXd SVD_V_v = svd_v.computeV();
+    VectorXd sigma_v = svd_v.singularValues();
+
+    // check dimension
+    int DimV = 0;
+    for (int i = 0; i < 6; ++i)
+      if (sigma_v(i) > v_singular_value_threshold_) DimV ++;
+
+    // get a basis for row space of velocity data
+    MatrixXd rowspace_v = SVD_V_v.block<6, DimV>(0, 0);
+
+    // filter out force data that aligns with row(v)
+    int f_data_length = 0;
+    MatrixXd f_data_filtered = MatrixXd::Zero(6, f_data.cols());
+    for (int i = 0; i < f_data.cols(); ++i) {
+      double length_in_v = (rowspace_v.transpose()*f_data.col(i)).norm();
+      if (length_in_v/f_data.col(i).norm() < 0.2) {
+        f_data_filtered.col(f_data_length) = f_data.col(i);
+        f_data_length ++;
+      }
     }
-    JacobiSVD<MatrixXd> svd_f(f_data, ComputeThinV);
-    JacobiSVD<MatrixXd> svd_v(v_data, ComputeFullV);
-    MatrixXd V_f = svd_f.computeV();
-    MatrixXd V_v = svd_v.computeV();
+    f_data_filtered.resize(6, f_data_length); // debug: make sure the crop works properly
 
-    svd_f.singularValues();
-    svd_v.singularValues();
+    // SVD to force data
+    JacobiSVD<MatrixXd> svd_f(f_data_filtered, ComputeThinV);
+    MatrixXd SVD_V_f = svd_f.computeV();
+    VectorXd sigma_f = svd_f.singularValues();
+    // check dimensions, estimate natural constraints
+    int DimF = 0;
+    for (int i = 0; i < 6; ++i)
+      if (sigma_f(i) > f_singular_value_threshold_) DimF ++;
+    MatrixXd N = SVD_V_f.block<6, DimF>(0, 0).transpose();
+    // sample DimF force directions
+    
 
+    MatrixXd N;
 
+    // get possitive direction from force measurement
+    // get A b_A
+    /* Do Hybrid Servoing */
 
-
-    controller_->f_queue_[i]
-    Vector3d p_WH, p_WO;
-    Vector4d q_WO;
-    p_WH = p_WH_traj_.col(fr);
-    p_WO = p_WO_traj_.col(fr);
-    q_WO = q_WO_traj_.col(fr);
-
-    // Omega
-    Matrix3d R_WO;
-    R_WO = quat2m(Quaterniond(q_WO(0), q_WO(1), q_WO(2), q_WO(3)));
-    MatrixXd E_qO(4, 3);
-    E_qO << -q_WO(1), -q_WO(2), -q_WO(3),
-            q_WO(0), -q_WO(3), q_WO(2),
-            q_WO(3), q_WO(0), -q_WO(1),
-            -q_WO(2), q_WO(1), q_WO(0);
-    E_qO = 0.5*E_qO;
-    MatrixXd Omega(10, 9);
-    // Omega = blkdiag(R_WO, E_qO, eye(3));
-    Omega = Eigen::Matrix<double, 10, 9>::Zero();
-    Omega.block<3,3>(0,0) = R_WO;
-    Omega.block<4,3>(3,3) = E_qO;
-    Omega.block<3,3>(7,6) = Matrix3d::Identity();
-
-    // Goal Description
-    MatrixXd Adj_g_WO_inv(6, 6);
-    // Adj_g_WO_inv = [R_WO', -R_WO'*wedge(p_WO); zeros(3), R_WO'];
-    Adj_g_WO_inv << R_WO.transpose(), -R_WO.transpose()*wedge(p_WO),
-        Matrix3f::Zero(), R_WO.transpose();
-
-    VectorXd t_OG(6), b_G(6);
-    t_OG = Adj_g_WO_inv*t_WG_;
-    b_G = t_OG;
-
-    // external force
-    VectorXd F(9);
-    // F = R_WO'*F_WGO; zeros(3,1); F_WGH];
-    F = VectorXd::Zero(9);
-    F.head(3) = R_WO.transpose()*F_WGO_;
-    F.tail(3) = F_WGH_;
-
-    // Guard conditions
-    //   hand contact is sticking; (force is in world frame)
-    //   table contacts are sticking;
-    //   hand contact normal force lower bound
-    MatrixXd A(dimAx, dimAy);
-    A = MatrixXd::Zero(dimAx, dimAy);
-    MatrixXd zarray(1, 3);
-    zarray << 0, 0, 1;
-    for (int i = 0; i < kFrictionConeSides_; ++i) {
-      A.block<1, 3>(i, 0) = (v_friction_directions_.col(i).transpose() -
-          kFrictionCoefficientHand_*zarray)*R_WO.transpose();
-      A.block<1, 3>(kFrictionConeSides_+i, 3) =
-          v_friction_directions_.col(i).transpose() -
-          kFrictionCoefficientTable_*zarray;
-      A.block<1, 3>(2*kFrictionConeSides_, 6) =
-          v_friction_directions_.col(i).transpose() -
-          kFrictionCoefficientTable_*zarray;
-    }
-    A.block<1, 3>(3*kFrictionConeSides_, 0) = -zarray*R_WO.transpose();
-
-    double J_array[90];
-    jac_phi_q_block_tilting(p_WO.data(), q_WO.data(), p_WH.data(),
-        p_OHC_.data(), p_WTC_all_.data(), p_OTC_all_.data(),
-        J_array);
-
-    // read the jacobian from results
-    MatrixXd Jac_phi_q(9, 10);
-    for(int i = 0; i<9; i++)
-      for(int j = 0; j<10; j++)
-        Jac_phi_q(i,j) = J_array[j*9 + i];
-
-    // [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(Omega, Jac_phi_q, ...
-    //         G, b_G, F, [], [], A, b_A, dims, 'num_seeds', 1);
     HFVC action;
+    int kDimActualized      = 6;
+    int kDimUnActualized    = 0;
+    int kDimSlidingFriction = 0;
+    int kNumSeeds           = 3;
+    int kDimLambda = N.rows();
+
+    VectorXf F(6, 1) = VectorXf::Zero(6);
     MatrixXd Aeq(1, 1); // dummy
     VectorXd beq(1); // dummy
-    int kDimActualized      = 3;
-    int kDimUnActualized    = 6;
-    int kDimSlidingFriction = 0;
-    int kDimLambda          = 3*(1+2);
-    int kNumSeeds           = 3;
-    solvehfvc(Omega, Jac_phi_q, G, b_G, F, Aeq, beq,
-      A, b_A,
+    solvehfvc(N, G, b_G, F, Aeq, beq, A, b_A,
       kDimActualized, kDimUnActualized,
       kDimSlidingFriction, kDimLambda,
       kNumSeeds,
