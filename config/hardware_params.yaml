@@ -33,10 +33,10 @@ ati:
     x: 0
     y: 0
     z:  0.0962
-    qw: 0.5556
+    qw: 0.9808
     qx: 0
     qy: 0
-    qz: 0.8315
+    qz: 0.1951
 
 # ABB EGM
 egm_portnum: 6510

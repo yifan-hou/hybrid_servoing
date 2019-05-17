@@ -1,8 +1,11 @@
 #pragma once
 
 #include <deque>
-#include <hybrid_servoing_tasks.h>
 
+#include <Eigen/Geometry>
+#include <Eigen/Dense>
+
+#include <apps/hybrid_servoing_tasks.h>
 
 class PlaneEngaging : public HybridServoingTask {
 public:
@@ -20,13 +23,9 @@ private:
   ForceControlController *controller_;
 
   /* task description variables */
-  MatrixXd G_;
-  VectorXd b_G_;
+  Eigen::MatrixXd G_;
+  Eigen::VectorXd b_G_;
   double kTimeStepSec_;
   double v_singular_value_threshold_;
   double f_singular_value_threshold_;
-
-  // MatrixXd N_; // current estimation of N
-
-
 };

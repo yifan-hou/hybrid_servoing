@@ -14,10 +14,6 @@
 
 #define PIf 3.1416f
 
-const static Eigen::IOFormat MatlabFmt(
-    Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]");
-
-
 class HybridServoingTask {
 public:
   virtual ~HybridServoingTask() {}

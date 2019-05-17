@@ -33,6 +33,13 @@ FC_I_Limit_T_6D: [50, 50, 50, 0.5, 0.5, 0.5] # Newton, N*m
 forcecontrol_print_flag: true
 forcecontrol_file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/forcecontrol_data.txt"
 
+# motion planning speed limit
+vel_max_translation: 20 # mm/s
+acc_max_translation: 1000 # mm/s^2
+vel_max_rotation: 0.2 # rad/s
+acc_max_rotation: 10 # rad/s^2
+
+
 ###################################################
 #       robot_bridge
 ###################################################

@@ -23,31 +23,31 @@ catkin_package(
 
 
 include_directories(
+  ${catkin_INCLUDE_DIRS}
+  ${CMAKE_CURRENT_SOURCE_DIR}
   include
   MatlabCodeGen/jac_phi_q_block_tilting
   MatlabCodeGen/jac_phi_q_flip_against_corner
-  ${catkin_INCLUDE_DIRS}
   /usr/include/eigen3
-  ~/Git/ZZJHand/include/
-  ~/Git/cpplibrary/include/
-  # ${Boost_INCLUDE_DIRS}
 )
 
-add_library(SOLVE_HFVC src/solvehfvc.cpp include/eiquadprog.hpp)
+find_library(TIMER_LIB TimerLinux HINTS /usr/local/lib/yifanlibrary)
+find_library(UT Utilities HINTS /usr/local/lib/yifanlibrary)
 
-add_library(HS_tasks src/hybrid_servoing_tasks.cpp)
-target_link_libraries(HS_tasks
+
+add_library(SOLVE_HFVC algorithms/solvehfvc.cpp algorithms/eiquadprog.hpp)
+
+add_library(Plane_Engaging apps/plane_engaging.cpp)
+target_link_libraries(Plane_Engaging
   SOLVE_HFVC
-  /usr0/home/yifanh/Git/ZZJHand/build/libHand.so
-  /usr0/home/yifanh/Git/cpplibrary/build/libTimerLinux.so
-  ${CMAKE_SOURCE_DIR}/force_control_bridge_ros/MatlabCodeGen/jac_phi_q_block_tilting/jac_phi_q_block_tilting.a
-  ${CMAKE_SOURCE_DIR}/force_control_bridge_ros/MatlabCodeGen/jac_phi_q_flip_against_corner/jac_phi_q_flip_against_corner.a
+  ${TIMER_LIB}
+  ${UT}
+#   ${CMAKE_SOURCE_DIR}/force_control_bridge_ros/MatlabCodeGen/jac_phi_q_block_tilting/jac_phi_q_block_tilting.a
+#   ${CMAKE_SOURCE_DIR}/force_control_bridge_ros/MatlabCodeGen/jac_phi_q_flip_against_corner/jac_phi_q_flip_against_corner.a
 )
-
 
 add_executable(${PROJECT_NAME}_node src/robot_bridge.cpp)
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
-  HS_tasks
-  /usr0/home/yifanh/Git/ZZJHand/build/libHand.so
+  Plane_Engaging
 )

@@ -4,9 +4,11 @@
 #include <cstdlib>  // For srand() and rand()
 #include <Eigen/SVD>
 
-#include "solvehfvc.h"
-#include "utilities.h"
+#include "algorithms/solvehfvc.h"
+#include "yifanlibrary/utilities.h"
 #include "yifanlibrary/TimerLinux.h"
+
+using namespace UT;
 
 Eigen::IOFormat MatlabFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
       "]");
@@ -56,11 +58,11 @@ bool PlaneEngaging::initialize(const std::string& file_name,
 bool PlaneEngaging::run() {
   MatrixXd f_data, v_data;
   controller_->reset();
-  Timer time;
+  Timer timer;
   int N_TRJ_ = 1000;
-  srand(time(0));
+  std::srand(std::time(0));
   for (int fr = 0; fr < N_TRJ_; ++fr) {
-    time.tic();
+    timer.tic();
     /* Estimate Natural Constraints from pool of data */
     // get the weighted data
     f_data = MatrixXd::Zero(6, controller_->_f_queue.size()); // debug: make sure the size does change
@@ -71,15 +73,14 @@ bool PlaneEngaging::run() {
       v_data.col(i) = controller_->_v_queue[i] * controller_->_v_weights[i];
 
     // SVD on velocity data
-    JacobiSVD<MatrixXd> svd_v(v_data, ComputeThinV);
-    MatrixXd SVD_V_v = svd_v.computeV();
+    Eigen::JacobiSVD<MatrixXd> svd_v(v_data, Eigen::ComputeThinV);
     VectorXd sigma_v = svd_v.singularValues();
     int DimV = 0;
     for (int i = 0; i < 6; ++i)
       if (sigma_v(i) > v_singular_value_threshold_) DimV ++;
 
     // get a basis for row space of velocity data
-    MatrixXd rowspace_v = SVD_V_v.block<6, DimV>(0, 0);
+    MatrixXd rowspace_v = svd_v.matrixV().leftCols(DimV);
 
     // filter out force data that aligns with row(v)
     int f_data_length = 0;
@@ -94,8 +95,7 @@ bool PlaneEngaging::run() {
     f_data_filtered.resize(6, f_data_length); // debug: make sure the crop works properly
 
     // SVD to filtered force data
-    JacobiSVD<MatrixXd> svd_f(f_data_filtered, ComputeThinV);
-    // MatrixXd SVD_V_f = svd_f.computeV();
+    Eigen::JacobiSVD<MatrixXd> svd_f(f_data_filtered, Eigen::ComputeThinV);
     VectorXd sigma_f = svd_f.singularValues();
     // check dimensions, estimate natural constraints
     int DimF = 0;
@@ -144,23 +144,22 @@ bool PlaneEngaging::run() {
     int kNumSeeds           = 3;
     int kDimLambda          = DimF;
 
-    VectorXd F(6) = VectorXd::Zero(6);
+    VectorXd F = VectorXd::Zero(6);
     MatrixXd Aeq(1, 1); // dummy
     VectorXd beq(1); // dummy
-    MatrixXd A(DimF, DimF + 6);
-    A = A.Zero(); // debug: make sure this works
-    VectorXd b_A(DimF) = VectorXd::Zero(DimF);
-    A.block<DimF, DimF>(0,0) = -MatrixXd::Identity(DimF);
+    MatrixXd A = MatrixXd::Zero(DimF, DimF + 6);
+    VectorXd b_A = VectorXd::Zero(DimF);
+    A.leftCols(DimF) = -MatrixXd::Identity(DimF,DimF);
     double kLambdaMin = 5.0;
     for (int i = 0; i < DimF; ++i) b_A(i) = - kLambdaMin;
 
-    solvehfvc(Nf, G, b_G, F, Aeq, beq, A, b_A,
+    solvehfvc(Nf, G_, b_G_, F, Aeq, beq, A, b_A,
       kDimActualized, kDimUnActualized,
       kDimSlidingFriction, kDimLambda,
       kNumSeeds,
       &action);
 
-    double computation_time_ms = time.toc();
+    double computation_time_ms = timer.toc();
     cout << "\n\nComputation Time: " << computation_time_ms << endl;
     /*  Execute the hybrid action */
     Vector6d v_Tr = Vector6d::Zero();
@@ -177,7 +176,8 @@ bool PlaneEngaging::run() {
     robot_->getPose(pose_fb);
     Matrix4d SE3_WT_fb = posemm2SE3(pose_fb);
     Matrix6d Adj_WT = SE32Adj(SE3_WT_fb);
-    Vector6d v_W = Adj_WT*action.R_a.inverse()*v_Tr;
+    Matrix6d R_a = action.R_a;
+    Vector6d v_W = Adj_WT*R_a.inverse()*v_Tr;
     Matrix4d SE3_WT_command;
     SE3_WT_command = SE3_WT_fb + wedge6(v_W)*SE3_WT_fb*dt;
     double pose_set[7];
@@ -203,14 +203,12 @@ bool PlaneEngaging::run() {
                           << force_Tr_set[3] << "|"
                           << force_Tr_set[4] << "|"
                           << force_Tr_set[5] << endl;
-    cout << "running time: " << kTimeStepSec_ << endl;
     cout << "Press Enter to begin motion!" << endl;
     // getchar();
     // cout << "motion begins:" << endl;
-    controller_->ExecuteHFVC_ABBEGM(action.n_af, action.n_av,
+    controller_->ExecuteHFVC(action.n_af, action.n_av,
         action.R_a, pose_set, force_Tr_set,
-        HS_CONTINUOUS, kTimeStepSec_, main_loop_rate_,
-        robot_, controller_);
+        HS_CONTINUOUS, main_loop_rate_);
   } // end for
 
 }

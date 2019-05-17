@@ -35,17 +35,16 @@ typedef struct
 {
     int n_av;
     int n_af;
-    Eigen::MatrixXf R_a;
-    Eigen::VectorXf w_av;
-    Eigen::VectorXf eta_af;
+    Eigen::MatrixXd R_a;
+    Eigen::VectorXd w_av;
+    Eigen::VectorXd eta_af;
 } HFVC;
 
-bool solvehfvc(const Eigen::MatrixXf &Omega,
-  const Eigen::MatrixXf &Jac_phi_q_all,
-  const Eigen::MatrixXf &G, const Eigen::VectorXf &b_G,
-  const Eigen::VectorXf &F,
-  const Eigen::MatrixXf &Aeq, const Eigen::VectorXf &beq,
-  const Eigen::MatrixXf &A, const Eigen::VectorXf &b_A,
+bool solvehfvc(const Eigen::MatrixXd &N_All,
+  const Eigen::MatrixXd &G, const Eigen::VectorXd &b_G,
+  const Eigen::VectorXd &F,
+  const Eigen::MatrixXd &Aeq, const Eigen::VectorXd &beq,
+  const Eigen::MatrixXd &A, const Eigen::VectorXd &b_A,
   const int kDimActualized, const int kDimUnActualized,
   const int kDimSlidingFriction, const int kDimLambda,
   const int kNumSeeds,
