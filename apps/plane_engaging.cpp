@@ -1,5 +1,7 @@
 #include <apps/plane_engaging.h>
 
+#include <ctime>    // For time()
+#include <cstdlib>  // For srand() and rand()
 #include <Eigen/SVD>
 
 #include "solvehfvc.h"
@@ -53,12 +55,10 @@ bool PlaneEngaging::initialize(const std::string& file_name,
 
 bool PlaneEngaging::run() {
   MatrixXd f_data, v_data;
-  f_data = MatrixXd::Zero(6, controller_->_pool_size);
-  v_data = MatrixXd::Zero(6, controller_->_pool_size);
-
   controller_->reset();
   Timer time;
   int N_TRJ_ = 1000;
+  srand(time(0));
   for (int fr = 0; fr < N_TRJ_; ++fr) {
     time.tic();
     /* Estimate Natural Constraints from pool of data */
@@ -69,11 +69,11 @@ bool PlaneEngaging::run() {
       f_data.col(i) = controller_->_f_queue[i] * controller_->_f_weights[i];
     for (int i = 0; i < controller_->_v_queue.size(); ++i)
       v_data.col(i) = controller_->_v_queue[i] * controller_->_v_weights[i];
+
+    // SVD on velocity data
     JacobiSVD<MatrixXd> svd_v(v_data, ComputeThinV);
     MatrixXd SVD_V_v = svd_v.computeV();
     VectorXd sigma_v = svd_v.singularValues();
-
-    // check dimension
     int DimV = 0;
     for (int i = 0; i < 6; ++i)
       if (sigma_v(i) > v_singular_value_threshold_) DimV ++;
@@ -93,22 +93,48 @@ bool PlaneEngaging::run() {
     }
     f_data_filtered.resize(6, f_data_length); // debug: make sure the crop works properly
 
-    // SVD to force data
+    // SVD to filtered force data
     JacobiSVD<MatrixXd> svd_f(f_data_filtered, ComputeThinV);
-    MatrixXd SVD_V_f = svd_f.computeV();
+    // MatrixXd SVD_V_f = svd_f.computeV();
     VectorXd sigma_f = svd_f.singularValues();
     // check dimensions, estimate natural constraints
     int DimF = 0;
     for (int i = 0; i < 6; ++i)
       if (sigma_f(i) > f_singular_value_threshold_) DimF ++;
-    MatrixXd N = SVD_V_f.block<6, DimF>(0, 0).transpose();
-    // sample DimF force directions
-    
+    // MatrixXd N = SVD_V_f.block<6, DimF>(0, 0).transpose();
+    // Sample DimF force directions
+    MatrixXd f_data_normalized = f_data_filtered;
+    for (int i = 0; i < f_data_length; ++i)
+      f_data_normalized.col(i).normalize();
 
-    MatrixXd N;
+    int kNFSamples = 100;
+    MatrixXd f_data_selected(6, DimF);
+    MatrixXd f_data_selected_new(6, DimF);
+    double f_distance = 0;
+    assert(f_data_length < 32767);
+    for (int i = 0; i < kNFSamples; ++i) {
+      // 1. sample
+      for (int s = 0; s < DimF; s++) {
+        int r = (rand() % f_data_length);
+        f_data_selected_new.col(s) = f_data_normalized.col(r);
+      }
+      // 2. compute distance
+      double f_distance_new = 0;
+      for (int ii = 0; ii < DimF-1; ++ii)
+        for (int jj = 0; jj < DimF-1-ii; ++jj)
+          f_distance_new += (f_data_selected_new.col(ii) -
+              f_data_selected_new.col(jj)).norm();
+      // 3. Update data
+      if (f_distance_new > f_distance) {
+        f_data_selected = f_data_selected_new;
+        f_distance = f_distance_new;
+      }
+    } // end sampling
 
-    // get possitive direction from force measurement
-    // get A b_A
+    MatrixXd Nf(DimF, 6);
+    for (int i = 0; i < DimF; ++i)
+      Nf.row(i) = f_data_selected.col(i).transpose();
+
     /* Do Hybrid Servoing */
 
     HFVC action;
@@ -116,12 +142,19 @@ bool PlaneEngaging::run() {
     int kDimUnActualized    = 0;
     int kDimSlidingFriction = 0;
     int kNumSeeds           = 3;
-    int kDimLambda = N.rows();
+    int kDimLambda          = DimF;
 
-    VectorXf F(6, 1) = VectorXf::Zero(6);
+    VectorXd F(6) = VectorXd::Zero(6);
     MatrixXd Aeq(1, 1); // dummy
     VectorXd beq(1); // dummy
-    solvehfvc(N, G, b_G, F, Aeq, beq, A, b_A,
+    MatrixXd A(DimF, DimF + 6);
+    A = A.Zero(); // debug: make sure this works
+    VectorXd b_A(DimF) = VectorXd::Zero(DimF);
+    A.block<DimF, DimF>(0,0) = -MatrixXd::Identity(DimF);
+    double kLambdaMin = 5.0;
+    for (int i = 0; i < DimF; ++i) b_A(i) = - kLambdaMin;
+
+    solvehfvc(Nf, G, b_G, F, Aeq, beq, A, b_A,
       kDimActualized, kDimUnActualized,
       kDimSlidingFriction, kDimLambda,
       kNumSeeds,
