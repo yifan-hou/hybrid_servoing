@@ -69,86 +69,91 @@ bool solvehfvc(const MatrixXf &N_ALL,
   cout << "   n_av = " << n_av << ", n_af = " << n_af << endl;
   assert(rank_N + kDimActualized >= kDimGeneralized);
 
-  cout << "  [2] Solving for Directions by PGD" << endl;
+  MatrixXf R_a(kDimActualized, kDimActualized);
+  MatrixXf T(kDimGeneralized, kDimGeneralized);
+  VectorXf w_av;
+  if (n_av == 0) {
+    cout << "  [2] No feasible velocity control can satisfy the goal" << endl;
+    R_a = MatrixXf::Identity(kDimActualized, kDimActualized);
+    T = MatrixXf::Identity(kDimGeneralized, kDimGeneralized);
+    w_av = VectorXf(0);
+  } else {
+    cout << "  [2] Solving for Directions by PGD" << endl;
 
-  int NIter   = 50;
-  int n_c     = rank_NG - kDimUnActualized;
-  MatrixXf BB = basis_c.transpose()*basis_c;
-  MatrixXf NN = basis_N*basis_N.transpose();
+    int NIter   = 50;
+    int n_c     = rank_NG - kDimUnActualized;
+    MatrixXf BB = basis_c.transpose()*basis_c;
+    MatrixXf NN = basis_N*basis_N.transpose();
 
-  std::vector<MatrixXf> k_all;
-  float cost_all[kNumSeeds] = {0};
-  for (int seed = 0; seed < kNumSeeds; ++seed)  {
-    MatrixXf k  = MatrixXf::Random(n_c, n_av); // initial solution
-    MatrixXf bck = basis_c*k;
-    for (int i = 0; i < bck.cols(); i++) {
-        float bck_col_norm = bck.col(i).norm();
-        k.col(i) /= bck_col_norm;
-    }
-    MatrixXf g(n_c, n_av);
-    float costs = 0;
-    for (int iter = 0; iter < NIter; ++iter) {
-      // compute gradient
-      g = MatrixXf::Zero(n_c, n_av);
-      costs = 0;
-      for (int i = 0; i < n_av; ++i) {
-        for (int j = 0; j < n_av; ++j) {
-            if (i == j) continue;
-            float tempcost = (k.col(i).transpose()*BB*k.col(j)).norm();
-            costs += tempcost*tempcost;
-            g.col(i) += 2.0f*(k.col(i).transpose()*BB*k.col(j))(0)*BB*k.col(j);
-        }
-        g.col(i) -= 2.0f*basis_c.transpose()*NN*basis_c*k.col(i);
-        costs -= k.col(i).transpose()*basis_c.transpose()*NN*basis_c*k.col(i);
-      }
-      // descent
-      k -= 10.0f*g;
-      // project
-      bck = basis_c*k;
+    std::vector<MatrixXf> k_all;
+    float cost_all[kNumSeeds] = {0};
+    for (int seed = 0; seed < kNumSeeds; ++seed)  {
+      MatrixXf k  = MatrixXf::Random(n_c, n_av); // initial solution
+      MatrixXf bck = basis_c*k;
       for (int i = 0; i < bck.cols(); i++) {
           float bck_col_norm = bck.col(i).norm();
           k.col(i) /= bck_col_norm;
       }
-      // cout << "     cost: " << costs << ", grad: " << g.norm() << endl;
+      MatrixXf g(n_c, n_av);
+      float costs = 0;
+      for (int iter = 0; iter < NIter; ++iter) {
+        // compute gradient
+        g = MatrixXf::Zero(n_c, n_av);
+        costs = 0;
+        for (int i = 0; i < n_av; ++i) {
+          for (int j = 0; j < n_av; ++j) {
+              if (i == j) continue;
+              float tempcost = (k.col(i).transpose()*BB*k.col(j)).norm();
+              costs += tempcost*tempcost;
+              g.col(i) += 2.0f*(k.col(i).transpose()*BB*k.col(j))(0)*BB*k.col(j);
+          }
+          g.col(i) -= 2.0f*basis_c.transpose()*NN*basis_c*k.col(i);
+          costs -= k.col(i).transpose()*basis_c.transpose()*NN*basis_c*k.col(i);
+        }
+        // descent
+        k -= 10.0f*g;
+        // project
+        bck = basis_c*k;
+        for (int i = 0; i < bck.cols(); i++) {
+            float bck_col_norm = bck.col(i).norm();
+            k.col(i) /= bck_col_norm;
+        }
+        // cout << "     cost: " << costs << ", grad: " << g.norm() << endl;
+      }
+      cost_all[seed] = costs;
+      k_all.push_back(k);
     }
-    cost_all[seed] = costs;
-    k_all.push_back(k);
+    const int SizeFloat = sizeof(cost_all) / sizeof(float);
+    float *cost_best    = std::min_element(cost_all, cost_all + kNumSeeds);
+    int min_id          = std::distance(cost_all, cost_best);
+    MatrixXf k_best     = k_all[min_id];
+    MatrixXf C_best     = (basis_c*k_best).transpose();
+
+    // R_a = [null(C_best(:, kDimUnActualized+1:end))';
+    //         C_best(:, kDimUnActualized+1:end)];
+    MatrixXf C_best_actualized = C_best.rightCols(kDimActualized);
+    Eigen::FullPivLU<MatrixXf> lu_decomp_C_best_actualized(C_best_actualized);
+    MatrixXf basis_C_best_actualized =
+        lu_decomp_C_best_actualized.kernel(); // columns of basis_NG forms a basis
+                  // of the null-space of C_best_actualized
+    R_a = MatrixXf::Zero(kDimActualized, kDimActualized);
+    R_a << basis_C_best_actualized.transpose(), C_best_actualized;
+    T = MatrixXf::Zero(kDimGeneralized, kDimGeneralized);
+    T.topLeftCorner(kDimUnActualized, kDimUnActualized) =
+        MatrixXf::Identity(kDimUnActualized, kDimUnActualized);
+    T.bottomRightCorner(kDimActualized,kDimActualized) = R_a;
+
+    // b_NG = [zeros(size(N, 1), 1); b_G];
+    VectorXf b_NG = VectorXf::Zero(N.rows() + b_G.rows());
+    b_NG.tail(b_G.rows()) = b_G;
+
+    // v_star = NG\b_NG;
+    VectorXf v_star = NG.fullPivLu().solve(b_NG);
+    // cout << "C_best: " << C_best.rows() << ", " << C_best.cols() << endl;
+    // cout << C_best;
+
+    w_av = C_best*v_star;
   }
-  const int SizeFloat = sizeof(cost_all) / sizeof(float);
-  float *cost_best    = std::min_element(cost_all, cost_all + kNumSeeds);
-  int min_id          = std::distance(cost_all, cost_best);
-  MatrixXf k_best     = k_all[min_id];
-  MatrixXf C_best     = (basis_c*k_best).transpose();
-  // // double check
-  // cout << "min id cost: " << cost_all[min_id] << endl;
-  // cout << "min cost: " << *cost_best << endl;
-
-
-  // R_a = [null(C_best(:, kDimUnActualized+1:end))';
-  //         C_best(:, kDimUnActualized+1:end)];
-  MatrixXf R_a(kDimActualized, kDimActualized);
-  MatrixXf C_best_actualized = C_best.rightCols(kDimActualized);
-  Eigen::FullPivLU<MatrixXf> lu_decomp_C_best_actualized(C_best_actualized);
-  MatrixXf basis_C_best_actualized =
-      lu_decomp_C_best_actualized.kernel(); // columns of basis_NG forms a basis
-                // of the null-space of C_best_actualized
-  R_a << basis_C_best_actualized.transpose(), C_best_actualized;
-  MatrixXf T = MatrixXf::Zero(kDimGeneralized, kDimGeneralized);
-  T.topLeftCorner(kDimUnActualized, kDimUnActualized) =
-      MatrixXf::Identity(kDimUnActualized, kDimUnActualized);
-  T.bottomRightCorner(kDimActualized,kDimActualized) = R_a;
-
-  // b_NG = [zeros(size(N, 1), 1); b_G];
-  VectorXf b_NG = VectorXf::Zero(N.rows() + b_G.rows());
-  b_NG.tail(b_G.rows()) = b_G;
-
-  // v_star = NG\b_NG;
-  VectorXf v_star = NG.fullPivLu().solve(b_NG);
-  // cout << "C_best: " << C_best.rows() << ", " << C_best.cols() << endl;
-  // cout << C_best;
-
-  VectorXf w_av = C_best*v_star;
-
 
   cout << "Begin Solving for force commands." << endl;
   // unactuated dimensions

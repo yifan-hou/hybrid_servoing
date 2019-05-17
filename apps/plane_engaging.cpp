@@ -163,12 +163,28 @@ bool PlaneEngaging::run() {
     double computation_time_ms = time.toc();
     cout << "\n\nComputation Time: " << computation_time_ms << endl;
     /*  Execute the hybrid action */
-    double pose_set[7];
-    robot_->getPose(pose_set); // get quaternion
-    for (int i = 0; i < 3; ++i) pose_set[i] = 1000.0 * p_WH(i); // mm
+    Vector6d v_Tr = Vector6d::Zero();
+    for (int i = 0; i < action.n_av; ++i)  v_Tr(i+action.n_af) = action.w_av(i);
 
-    double force_set[6] = {0};
-    for (int i = 0; i < action.n_af; ++i)  force_set[i] = action.eta_af(i);
+    const double kVMax = 0.1; // m/s,  maximum speed limit
+    if (v_Tr.norm() > kVMax) {
+      v_Tr.normalize();
+      v_Tr *= kVMax;
+    }
+
+    const double dt = 0.2; // s
+    double pose_fb[7];
+    robot_->getPose(pose_fb);
+    Matrix4d SE3_WT_fb = posemm2SE3(pose_fb);
+    Matrix6d Adj_WT = SE32Adj(SE3_WT_fb);
+    Vector6d v_W = Adj_WT*action.R_a.inverse()*v_Tr;
+    Matrix4d SE3_WT_command;
+    SE3_WT_command = SE3_WT_fb + wedge6(v_W)*SE3_WT_fb*dt;
+    double pose_set[7];
+    SE32Posemm(SE3_WT_command, pose_set);
+
+    double force_Tr_set[6] = {0};
+    for (int i = 0; i < action.n_af; ++i)  force_Tr_set[i] = action.eta_af(i);
 
     cout << "\nSolved. Solution Action:" << endl;
     cout << "n_af: " << action.n_af << endl;
@@ -181,18 +197,18 @@ bool PlaneEngaging::run() {
     //                      << pose_set[4] << "|"
     //                      << pose_set[5] << "|"
     //                      << pose_set[6] << endl;
-    cout << "force_set: " << force_set[0] << "|"
-                          << force_set[1] << "|"
-                          << force_set[2] << " || "
-                          << force_set[3] << "|"
-                          << force_set[4] << "|"
-                          << force_set[5] << endl;
+    cout << "force_Tr_set: " << force_Tr_set[0] << "|"
+                          << force_Tr_set[1] << "|"
+                          << force_Tr_set[2] << " || "
+                          << force_Tr_set[3] << "|"
+                          << force_Tr_set[4] << "|"
+                          << force_Tr_set[5] << endl;
     cout << "running time: " << kTimeStepSec_ << endl;
     cout << "Press Enter to begin motion!" << endl;
     // getchar();
     // cout << "motion begins:" << endl;
-    ExecuteHFVC_ABBEGM(action.n_af, action.n_av,
-        action.R_a, pose_set, force_set,
+    controller_->ExecuteHFVC_ABBEGM(action.n_af, action.n_av,
+        action.R_a, pose_set, force_Tr_set,
         HS_CONTINUOUS, kTimeStepSec_, main_loop_rate_,
         robot_, controller_);
   } // end for
