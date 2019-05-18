@@ -28,4 +28,7 @@ private:
   double kTimeStepSec_;
   double v_singular_value_threshold_;
   double f_singular_value_threshold_;
+
+  /* MISC */
+  std::string folder_path_;
 };
