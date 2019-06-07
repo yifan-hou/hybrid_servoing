@@ -34,6 +34,7 @@ double kVelMaxRot;
 double kAccMaxRot;
 
 // other global variables
+ros::NodeHandle *ros_handle_p;
 mutex mtx;
 ForceControlHardware robot;
 ForceControlController controller;
@@ -359,7 +360,7 @@ bool SrvHybridServo(std_srvs::Empty::Request  &req,
     // LeveringUp task(&robot, &controller);
     ROS_INFO("Reading pose from the file..\n");
 
-    task.initialize(HYBRID_SERVO_FILE_PATH, main_loop_rate);
+    task.initialize(HYBRID_SERVO_FILE_PATH, main_loop_rate, *ros_handle_p);
     task.run();
 
     cout << "[robot_bridge] SrvHybridServo finished. " << endl;
@@ -371,44 +372,45 @@ bool SrvHybridServo(std_srvs::Empty::Request  &req,
 int main(int argc, char* argv[])
 {
     ros::init(argc, argv, "robot_bridge_node");
-    ros::NodeHandle hd;
+    ros::NodeHandle ros_handle;
+    ros_handle_p = &ros_handle;
 
     ROS_INFO_STREAM("robot_bridge server is starting");
 
-    hd.param(std::string("/main_loop_rate"), main_loop_rate, 500);
-    if (!hd.hasParam("/main_loop_rate"))
+    ros_handle.param(std::string("/main_loop_rate"), main_loop_rate, 500);
+    if (!ros_handle.hasParam("/main_loop_rate"))
         ROS_WARN_STREAM("Parameter [/main_loop_rate] not found, using default: " << main_loop_rate);
 
-    hd.param(std::string("/force_touch_threshold"), force_touch_threshold, 1.0);
-    if (!hd.hasParam("/force_touch_threshold"))
+    ros_handle.param(std::string("/force_touch_threshold"), force_touch_threshold, 1.0);
+    if (!ros_handle.hasParam("/force_touch_threshold"))
         ROS_WARN_STREAM("Parameter [/force_touch_threshold] not found, using default: " << force_touch_threshold);
 
     // Speed limit for motion planning
-    hd.param(string("/vel_max_translation"), kVelMaxTrans, 0.0);
-    hd.param(string("/acc_max_translation"), kAccMaxTrans, 0.0);
-    hd.param(string("/vel_max_rotation"), kVelMaxRot, 0.0);
-    hd.param(string("/acc_max_rotation"), kAccMaxRot, 0.0);
-    if (!hd.hasParam("/vel_max_translation"))
+    ros_handle.param(string("/vel_max_translation"), kVelMaxTrans, 0.0);
+    ros_handle.param(string("/acc_max_translation"), kAccMaxTrans, 0.0);
+    ros_handle.param(string("/vel_max_rotation"), kVelMaxRot, 0.0);
+    ros_handle.param(string("/acc_max_rotation"), kAccMaxRot, 0.0);
+    if (!ros_handle.hasParam("/vel_max_translation"))
         ROS_WARN_STREAM("Parameter [/vel_max_translation] not found, using default: " << kVelMaxTrans);
-    if (!hd.hasParam("/acc_max_translation"))
+    if (!ros_handle.hasParam("/acc_max_translation"))
         ROS_WARN_STREAM("Parameter [/acc_max_translation] not found, using default: " << kAccMaxTrans);
-    if (!hd.hasParam("/vel_max_rotation"))
+    if (!ros_handle.hasParam("/vel_max_rotation"))
         ROS_WARN_STREAM("Parameter [/vel_max_rotation] not found, using default: " << kVelMaxRot);
-    if (!hd.hasParam("/acc_max_rotation"))
+    if (!ros_handle.hasParam("/acc_max_rotation"))
         ROS_WARN_STREAM("Parameter [/acc_max_rotation] not found, using default: " << kAccMaxRot);
 
-    if (!hd.hasParam("/robot_bridge/default_pose"))
+    if (!ros_handle.hasParam("/robot_bridge/default_pose"))
     {
         ROS_WARN_STREAM("Parameter [/robot_bridge/default_pose] not found!");
         return -1;
     }
-    hd.param(std::string("/robot_bridge/default_pose/x"), default_pose[0], 40.0);
-    hd.param(std::string("/robot_bridge/default_pose/y"), default_pose[1], 356.0);
-    hd.param(std::string("/robot_bridge/default_pose/z"), default_pose[2], 400.0);
-    hd.param(std::string("/robot_bridge/default_pose/qw"), default_pose[3], 0.0);
-    hd.param(std::string("/robot_bridge/default_pose/qx"), default_pose[4], 0.0);
-    hd.param(std::string("/robot_bridge/default_pose/qy"), default_pose[5], 1.0);
-    hd.param(std::string("/robot_bridge/default_pose/qz"), default_pose[6], 0.0);
+    ros_handle.param(std::string("/robot_bridge/default_pose/x"), default_pose[0], 40.0);
+    ros_handle.param(std::string("/robot_bridge/default_pose/y"), default_pose[1], 356.0);
+    ros_handle.param(std::string("/robot_bridge/default_pose/z"), default_pose[2], 400.0);
+    ros_handle.param(std::string("/robot_bridge/default_pose/qw"), default_pose[3], 0.0);
+    ros_handle.param(std::string("/robot_bridge/default_pose/qx"), default_pose[4], 0.0);
+    ros_handle.param(std::string("/robot_bridge/default_pose/qy"), default_pose[5], 1.0);
+    ros_handle.param(std::string("/robot_bridge/default_pose/qz"), default_pose[6], 0.0);
 
     // --------------------------------------------------------
     // Initialize robot and forcecontroller
@@ -416,18 +418,18 @@ int main(int argc, char* argv[])
     std::chrono::high_resolution_clock::time_point TheTime0;
     TheTime0 = std::chrono::high_resolution_clock::now();
 
-    robot.init(hd, TheTime0); // robot must be initialized before controller
-    controller.init(hd, &robot, TheTime0);
+    robot.init(ros_handle, TheTime0); // robot must be initialized before controller
+    controller.init(ros_handle, &robot, TheTime0);
     controller.reset();
     // --------------------------------------------------------
     // Establish Services
     // --------------------------------------------------------
-    ros::ServiceServer reset_service            = hd.advertiseService("reset", SrvReset);
-    ros::ServiceServer move_tool_service        = hd.advertiseService("move_tool", SrvMoveTool);
-    // ros::ServiceServer move_hybrid_service      = hd.advertiseService("move_hybrid", SrvMoveHybrid);
-    ros::ServiceServer move_hybrid_service      = hd.advertiseService("move_hybrid", SrvHybridServo);
-    ros::ServiceServer move_until_touch_service = hd.advertiseService("move_until_touch", SrvMoveUntilTouch);
-    ros::ServiceServer get_pose_service         = hd.advertiseService("get_pose", SrvGetPose);
+    ros::ServiceServer reset_service            = ros_handle.advertiseService("reset", SrvReset);
+    ros::ServiceServer move_tool_service        = ros_handle.advertiseService("move_tool", SrvMoveTool);
+    // ros::ServiceServer move_hybrid_service      = ros_handle.advertiseService("move_hybrid", SrvMoveHybrid);
+    ros::ServiceServer move_hybrid_service      = ros_handle.advertiseService("move_hybrid", SrvHybridServo);
+    ros::ServiceServer move_until_touch_service = ros_handle.advertiseService("move_until_touch", SrvMoveUntilTouch);
+    ros::ServiceServer get_pose_service         = ros_handle.advertiseService("get_pose", SrvGetPose);
 
     cout << endl << "[robot_bridge] Initialization is done. Service servers are listening.." << endl;
     ros::spin();

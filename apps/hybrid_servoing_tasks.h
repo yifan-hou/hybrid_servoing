@@ -19,7 +19,7 @@ public:
   virtual ~HybridServoingTask() {}
 
   virtual bool initialize(const std::string& file_name,
-    const int main_loop_rate) = 0;
+    const int main_loop_rate, ros::NodeHandle& root_nh) = 0;
   virtual bool run() = 0;
 
   int main_loop_rate_;

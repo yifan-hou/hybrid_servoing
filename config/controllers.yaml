@@ -16,7 +16,7 @@ Stiffness_matrix_diag_elements: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
 #   Inertia matrix as viewed in tool frame
 Inertia_matrix_diag_elements: [1, 1, 1, 0.005, 0.005, 0.005]
 #   Damping coefficient matrix as viewed in tool frame
-Damping_matrix_diag_elements: [5, 5, 5, 0.05, 0.05, 0.05]
+Damping_matrix_diag_elements: [15, 15, 15, 0.15, 0.15, 0.15]
 
 # Force control PID Gains
 # one set for translation, another set for rotation
@@ -34,9 +34,9 @@ forcecontrol_print_flag: true
 forcecontrol_file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/forcecontrol_data.txt"
 
 # motion planning speed limit
-vel_max_translation: 20 # mm/s
+vel_max_translation: 80 # mm/s
 acc_max_translation: 1000 # mm/s^2
-vel_max_rotation: 0.2 # rad/s
+vel_max_rotation: 0.6 # rad/s
 acc_max_rotation: 10 # rad/s^2
 
 
@@ -45,10 +45,20 @@ acc_max_rotation: 10 # rad/s^2
 ###################################################
 robot_bridge:
     default_pose: # when tool frame is set for probe
-      x: 50 #40
-      y: 416
-      z: 390
+      x: 40
+      y: 352
+      z: 440
       qw: 0
-      qx: 0.1951
-      qy: 0.9808
+      qx: 1
+      qy: 0
       qz: 0
+
+# experimental
+constraint_estimation:
+    pool_duration: 0.5 #s
+    scale_force_vector: [1, 1, 1, 10, 10, 10] # Newton, N*m
+    scale_vel_vector: [1, 1, 1, 0.5, 0.5, 0.5] # m/s, rad/s
+    var_force: 1.5 # variance of force magnitude after scaling
+    var_velocity: 0.005 # variance of velocity magnitude after scaling
+    v_singular_value_threshold: 0.5
+    f_singular_value_threshold: 0.1

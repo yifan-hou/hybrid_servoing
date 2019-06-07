@@ -46,28 +46,50 @@ bool solvehfvc(const MatrixXd &N_ALL,
   NG << N, G;
 
   // matrix decomposition
+  //  There are two things to care about Eigen::FullPivLU.
+  //  Firstly, if the matrix to be decomposed is empty or all zero, the kernel()
+  //    method will throw a run time error.
+  //  Secondly, if the null space has zero dimension, the output is NOT a zero
+  //    dimensional matrix, but a n x 1 vector with all zeros.
   Eigen::FullPivLU<MatrixXd> lu_decomp_N(N);
   int rank_N = lu_decomp_N.rank();
-  MatrixXd basis_N = lu_decomp_N.kernel(); // columns of basis_N forms a basis
-                                           // of the null-space of N
+  MatrixXd basis_N; // columns of basis_N forms a basis of the null-space of N
+  if (rank_N > 0)
+      basis_N = lu_decomp_N.kernel();
+  else
+      basis_N = MatrixXd::Identity(kDimGeneralized, kDimGeneralized);
+
   Eigen::FullPivLU<MatrixXd> lu_decomp_NG(NG);
   int rank_NG = lu_decomp_NG.rank();
-  MatrixXd basis_NG = lu_decomp_NG.kernel(); // columns of basis_NG forms a basis
-                                           // of the null-space of NG
-  MatrixXd C_c(basis_NG.cols()+kDimUnActualized, basis_NG.rows());
-  C_c << basis_NG.transpose(),
-      MatrixXd::Identity(kDimUnActualized,kDimUnActualized),
-      MatrixXd::Zero(kDimUnActualized,kDimActualized);
-  Eigen::FullPivLU<MatrixXd>
-      lu_decomp_C_c(C_c);
-  MatrixXd basis_c = lu_decomp_C_c.kernel(); // columns of basis_C_c forms a basis
-                                           // of the null-space of C_c
+  assert(rank_NG > 0);
 
   int n_av = rank_NG - rank_N;
   int n_af = kDimActualized - n_av;
-
   cout << "   n_av = " << n_av << ", n_af = " << n_af << endl;
   assert(rank_N + kDimActualized >= kDimGeneralized);
+
+  MatrixXd basis_c;
+  if (rank_NG < kDimGeneralized) {
+    // null_NG is not empty
+    // so C_c is also not empty
+    MatrixXd null_NG = lu_decomp_NG.kernel(); // columns of null_NG forms a basis
+                                             // of the null-space of NG
+    MatrixXd C_c(null_NG.cols()+kDimUnActualized, kDimGeneralized);
+    C_c << null_NG.transpose(),
+        MatrixXd::Identity(kDimUnActualized,kDimUnActualized),
+        MatrixXd::Zero(kDimUnActualized,kDimActualized);
+    Eigen::FullPivLU<MatrixXd> lu_decomp_C_c(C_c);
+    basis_c = lu_decomp_C_c.kernel(); // columns of basis_C_c forms a basis
+                                             // of the null-space of C_c
+  } else if (kDimUnActualized > 0) {
+    MatrixXd C_c(kDimUnActualized, kDimGeneralized);
+    C_c << MatrixXd::Identity(kDimUnActualized,kDimUnActualized),
+        MatrixXd::Zero(kDimUnActualized,kDimActualized);
+    Eigen::FullPivLU<MatrixXd> lu_decomp_C_c(C_c);
+    basis_c = lu_decomp_C_c.kernel(); // columns of basis_C_c forms a basis
+  } else {
+    basis_c = MatrixXd::Identity(kDimGeneralized, kDimGeneralized);
+  }
 
   MatrixXd R_a(kDimActualized, kDimActualized);
   MatrixXd T(kDimGeneralized, kDimGeneralized);
@@ -80,6 +102,7 @@ bool solvehfvc(const MatrixXd &N_ALL,
   } else {
     cout << "  [2] Solving for Directions by PGD" << endl;
 
+    assert(basis_c.norm() > 0.1);// this shouldn't happen
     int NIter   = 50;
     int n_c     = rank_NG - kDimUnActualized;
     MatrixXd BB = basis_c.transpose()*basis_c;
@@ -123,7 +146,6 @@ bool solvehfvc(const MatrixXd &N_ALL,
       cost_all[seed] = costs;
       k_all.push_back(k);
     }
-    const int SizeFloat = sizeof(cost_all) / sizeof(float);
     float *cost_best    = std::min_element(cost_all, cost_all + kNumSeeds);
     int min_id          = std::distance(cost_all, cost_best);
     MatrixXd k_best     = k_all[min_id];
@@ -131,11 +153,16 @@ bool solvehfvc(const MatrixXd &N_ALL,
 
     // R_a = [null(C_best(:, kDimUnActualized+1:end))';
     //         C_best(:, kDimUnActualized+1:end)];
+    // For this decomposition, the input C_best_actualized won't be empty
+    // because it has kDimActualized cols; its output basis_C_best_actualized
+    // also won't be empty as we are conditioned on n_av > 0
     MatrixXd C_best_actualized = C_best.rightCols(kDimActualized);
     Eigen::FullPivLU<MatrixXd> lu_decomp_C_best_actualized(C_best_actualized);
-    MatrixXd basis_C_best_actualized =
-        lu_decomp_C_best_actualized.kernel(); // columns of basis_NG forms a basis
-                  // of the null-space of C_best_actualized
+    MatrixXd basis_C_best_actualized;
+    int rank_C_best_actualized = lu_decomp_C_best_actualized.rank();
+    assert(rank_C_best_actualized > 0);
+    basis_C_best_actualized = // columns of basis_C_best_actualized forms the
+        lu_decomp_C_best_actualized.kernel(); // null space of C_best_actualized
     R_a = MatrixXd::Zero(kDimActualized, kDimActualized);
     R_a << basis_C_best_actualized.transpose(), C_best_actualized;
     T = MatrixXd::Zero(kDimGeneralized, kDimGeneralized);
@@ -161,27 +188,26 @@ bool solvehfvc(const MatrixXd &N_ALL,
   MatrixXd H = MatrixXd::Zero(kDimUnActualized, kDimGeneralized);
   H.leftCols(kDimUnActualized) = MatrixXd::Identity(kDimUnActualized,
       kDimUnActualized);
-  // Newton's laws
   MatrixXd T_inv = T.inverse();
-  MatrixXd M_newton(kDimUnActualized+kDimGeneralized,
+
+  // Newton's laws
+  MatrixXd M_newton_H(kDimUnActualized, kDimGeneralized + kDimContactForce);
+  if (kDimUnActualized > 0)
+    M_newton_H << MatrixXd::Zero(kDimUnActualized, kDimContactForce), H*T_inv;
+
+  MatrixXd M_newton_N(kDimGeneralized, kDimGeneralized + kDimContactForce);
+  if (kDimContactForce > 0)
+    M_newton_N << T*N_ALL.transpose(),
+            MatrixXd::Identity(kDimGeneralized, kDimGeneralized);
+  else
+    M_newton_N << MatrixXd::Identity(kDimGeneralized, kDimGeneralized);
+
+  MatrixXd M_newton(kDimUnActualized+kDimGeneralized+Aeq.rows(),
       kDimGeneralized + kDimContactForce);
-  if (kDimSlidingFriction > 0) {
-    M_newton.resize(kDimUnActualized+kDimGeneralized+Aeq.rows(),
-      kDimGeneralized + kDimContactForce);
-    M_newton << MatrixXd::Zero(kDimUnActualized, kDimContactForce), H*T_inv,
-        T*N_ALL.transpose(),
-        MatrixXd::Identity(kDimGeneralized, kDimGeneralized), Aeq;
-  } else {
-    M_newton << MatrixXd::Zero(kDimUnActualized, kDimContactForce), H*T_inv,
-        T*N_ALL.transpose(),
-        MatrixXd::Identity(kDimGeneralized, kDimGeneralized);
-  }
+  M_newton << M_newton_H, M_newton_N, Aeq;
+
   VectorXd b_newton(M_newton.rows());
-  if (kDimSlidingFriction > 0) {
-    b_newton << VectorXd::Zero(H.rows()), -T*F, beq;
-  } else {
-    b_newton << VectorXd::Zero(H.rows()), -T*F;
-  }
+  b_newton << VectorXd::Zero(H.rows()), -T*F, beq;
 
   MatrixXd M_free(M_newton.rows(), M_newton.cols() - n_af);
   M_free << M_newton.leftCols(kDimContactForce+kDimUnActualized),
@@ -195,30 +221,17 @@ bool solvehfvc(const MatrixXd &N_ALL,
   //     CE^T x + ce0 = 0
   //     CI^T x + ci0 >= 0
   // variables: [free_force, dual_free_force, eta_af]
+
+  // Cost function
   int n_free = kDimContactForce + kDimUnActualized + n_av;
   int n_dual_free = M_newton.rows();
   Eigen::VectorXd Gdiag = Eigen::VectorXd::Zero(n_free+n_dual_free+n_af);
   for (int i = 0; i < n_af; ++i) Gdiag(n_free+n_dual_free+i) = 1.0;
   for (int i = 0; i < Gdiag.rows(); ++i) Gdiag(i) += 1e-3; // regularization
-
   Eigen::MatrixXd G0 = Gdiag.asDiagonal();
   Eigen::VectorXd g0 = Eigen::VectorXd::Zero(G0.rows());
-  // A_temp = [A(:, 1:kDimContactForce), A(:, kDimContactForce+1:end)*T_inv];
-  MatrixXd A_temp(A.rows(), A.cols());
-  A_temp << A.leftCols(kDimContactForce), A.rightCols(kDimGeneralized)*T_inv;
 
-  // 0.5 x'Qx + f'x
-  // Ax<b
-  // A_lambda_eta_u = A_temp(:, 1:kDimContactForce+kDimUnActualized);
-  // A_eta_af = A_temp(:, kDimContactForce+kDimUnActualized+1:kDimContactForce+kDimUnActualized+n_af);
-  // A_eta_av = A_temp(:, kDimContactForce+kDimUnActualized+n_af+1:end);
-  // qp.A = [A_lambda_eta_u A_eta_av zeros(size(A, 1), n_dual_free) A_eta_af];
-  MatrixXd qpA(A.rows(), A.cols() + n_dual_free);
-  qpA << A_temp.leftCols(kDimContactForce+kDimUnActualized),
-      A_temp.rightCols(n_av), MatrixXd::Zero(A.rows(), n_dual_free),
-      A_temp.middleCols(kDimContactForce+kDimUnActualized, n_af);
-  VectorXd qpb = b_A;
-
+  // equality constraints
   // Aeq x = beq
   // qpAeq = [2*eye(n_free), M_free', zeros(n_free, n_af);
   //           M_free, zeros(size(M_free, 1)), M_eta_af];
@@ -230,11 +243,34 @@ bool solvehfvc(const MatrixXd &N_ALL,
   VectorXd qpbeq(n_free+b_newton.rows());
   qpbeq << VectorXd::Zero(n_free), b_newton;
 
+
+  // Inequality constraints
+  // Ax<b
+  // A_temp = [A(:, 1:kDimContactForce), A(:, kDimContactForce+1:end)*T_inv];
+  // A_lambda_eta_u = A_temp(:, 1:kDimContactForce+kDimUnActualized);
+  // A_eta_af = A_temp(:, kDimContactForce+kDimUnActualized+1:kDimContactForce+kDimUnActualized+n_af);
+  // A_eta_av = A_temp(:, kDimContactForce+kDimUnActualized+n_af+1:end);
+  // qp.A = [A_lambda_eta_u A_eta_av zeros(size(A, 1), n_dual_free) A_eta_af];
+  MatrixXd qpA;
+  if (A.rows() > 0) {
+    MatrixXd A_temp(A.rows(), A.cols());
+    A_temp << A.leftCols(kDimContactForce), A.rightCols(kDimGeneralized)*T_inv;
+    qpA = MatrixXd(A.rows(), A.cols() + n_dual_free);
+    qpA << A_temp.leftCols(kDimContactForce+kDimUnActualized),
+        A_temp.rightCols(n_av), MatrixXd::Zero(A.rows(), n_dual_free),
+        A_temp.middleCols(kDimContactForce+kDimUnActualized, n_af);
+  } else {
+    qpA = MatrixXd(0, A.cols() + n_dual_free);
+  }
+  VectorXd qpb = b_A;
+
+  // solve the QP
   Eigen::VectorXd x = Eigen::VectorXd::Random(g0.rows());
   double cost = solve_quadprog(G0, g0,
       qpAeq.transpose().cast<double>(), -qpbeq.cast<double>(),
       -qpA.transpose().cast<double>(), qpb.cast<double>(), x);
 
+  // read the results
   Eigen::IOFormat MatlabFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
       "]");
   cout << "  QP Solved. cost = " << cost << endl;
@@ -244,9 +280,11 @@ bool solvehfvc(const MatrixXd &N_ALL,
   cout << "   Equality violation: " << (qpbeq - qpAeq*x).norm()
       << endl;
 
-  VectorXd b_Ax = qpA*x - qpb;
   float inequality_violation = 0;
-  if (b_Ax.maxCoeff() > 0 ) inequality_violation = b_Ax.maxCoeff();
+  if (qpA.rows() > 0) {
+    VectorXd b_Ax = qpA*x - qpb;
+    if (b_Ax.maxCoeff() > 0 ) inequality_violation = b_Ax.maxCoeff();
+  }
   cout << "   Inequality violation: " << inequality_violation
       << endl;
 

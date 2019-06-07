@@ -23,10 +23,10 @@ PlaneEngaging::~PlaneEngaging() {
 }
 
 bool PlaneEngaging::initialize(const std::string& file_name,
-    const int main_loop_rate) {
+    const int main_loop_rate, ros::NodeHandle& root_nh) {
   main_loop_rate_ = main_loop_rate;
   folder_path_ = file_name;
-  // parameters
+  // parameters in file
   //  G, b_G
   ifstream fp;
   fp.open(file_name + "plane_engaging/para.txt");
@@ -52,28 +52,68 @@ bool PlaneEngaging::initialize(const std::string& file_name,
   cout << "G_: " << G_.format(MatlabFmt) << endl;
   cout << "b_G_: " << b_G_.format(MatlabFmt) << endl;
 
+  // parameters in ROS server
+  std::vector<double> scale_force_vector;
+  root_nh.getParam("/constraint_estimation/scale_force_vector", scale_force_vector);
+  if (!root_nh.hasParam("/constraint_estimation/scale_force_vector"))
+    ROS_WARN_STREAM("Parameter [/constraint_estimation/scale_force_vector] not found!");
+
+  force_scale_matrix_inv_ = Matrix6d::Zero();
+  for (int i = 0; i < 6; ++i) force_scale_matrix_inv_(i,i) = 1.0/scale_force_vector[i];
+
+  root_nh.param(string("/constraint_estimation/v_singular_value_threshold"),
+      v_singular_value_threshold_, 0.1);
+  root_nh.param(string("/constraint_estimation/f_singular_value_threshold"),
+      f_singular_value_threshold_, 0.1);
+  if (!root_nh.hasParam("/constraint_estimation/v_singular_value_threshold"))
+      ROS_WARN_STREAM("Parameter "
+      "[/constraint_estimation/v_singular_value_threshold] not found, "
+      " using default: " << v_singular_value_threshold_);
+  if (!root_nh.hasParam("/constraint_estimation/f_singular_value_threshold"))
+      ROS_WARN_STREAM("Parameter "
+      "[/constraint_estimation/f_singular_value_threshold] not found, "
+      "using default: " << f_singular_value_threshold_);
+
   return true;
 }
 
 bool PlaneEngaging::run() {
   MatrixXd f_data, v_data;
   controller_->reset();
+
+  if (controller_->_f_queue.size() < 50) {
+    cout << "Run update() for " << main_loop_rate_ << " frames:" << endl;
+    // first, run update for 1s to populate the data deques
+    ros::Rate pub_rate(main_loop_rate_);
+    ros::Duration period(EGM_PERIOD);
+    for (int i = 0; i < main_loop_rate_; ++i) {
+      ros::Time time_now = ros::Time::now();
+      bool b_is_safe = controller_->update(time_now, period);
+      if(!b_is_safe) break;
+      pub_rate.sleep();
+    }
+    cout << "Done." << endl;
+  }
+
   Timer timer;
-  int N_TRJ_ = 1; // 1000
+  int N_TRJ_ = 50; // 1000
   std::srand(std::time(0));
   for (int fr = 0; fr < N_TRJ_; ++fr) {
     timer.tic();
     /* Estimate Natural Constraints from pool of data */
     // get the weighted data
-    f_data = MatrixXd::Zero(6, controller_->_f_queue.size()); // debug: make sure the size does change
+    // debug
+    f_data = MatrixXd::Zero(6, controller_->_f_queue.size());
     v_data = MatrixXd::Zero(6, controller_->_v_queue.size());
     for (int i = 0; i < controller_->_f_queue.size(); ++i)
       f_data.col(i) = controller_->_f_queue[i] * controller_->_f_weights[i];
     for (int i = 0; i < controller_->_v_queue.size(); ++i)
       v_data.col(i) = controller_->_v_queue[i] * controller_->_v_weights[i];
+    cout << "f_queue size: " << controller_->_f_queue.size() << endl;
+    cout << "f_data size: " << f_data.cols() << endl;
 
     // SVD on velocity data
-    Eigen::JacobiSVD<MatrixXd> svd_v(v_data, Eigen::ComputeThinV);
+    Eigen::JacobiSVD<MatrixXd> svd_v(v_data.transpose(), Eigen::ComputeThinV);
     VectorXd sigma_v = svd_v.singularValues();
     int DimV = 0;
     for (int i = 0; i < 6; ++i)
@@ -85,60 +125,77 @@ bool PlaneEngaging::run() {
     // filter out force data that:
     //    1. aligns with row(v), or
     //    2. has a small weight
-    int f_data_length = 0;
-    MatrixXd f_data_filtered = MatrixXd::Zero(6, f_data.cols());
+    std::vector<int> f_id;
     for (int i = 0; i < f_data.cols(); ++i) {
       double length = f_data.col(i).norm();
       if (length > 1.5) { // weighted length in newton
-        double length_in_v = (rowspace_v.transpose()*f_data.col(i)).norm();
-        if (length_in_v/length < 0.2) {
-          f_data_filtered.col(f_data_length) = f_data.col(i);
-          f_data_length ++;
-        }
+        f_id.push_back(i);
       }
     }
-    f_data_filtered.resize(6, f_data_length); // debug: make sure the crop works properly
-
-    // SVD to filtered force data
-    Eigen::JacobiSVD<MatrixXd> svd_f(f_data_filtered, Eigen::ComputeThinV);
-    VectorXd sigma_f = svd_f.singularValues();
-    // check dimensions, estimate natural constraints
-    int DimF = 0;
-    for (int i = 0; i < 6; ++i)
-      if (sigma_f(i) > f_singular_value_threshold_) DimF ++;
-    // MatrixXd N = SVD_V_f.block<6, DimF>(0, 0).transpose();
-    // Sample DimF force directions
-    MatrixXd f_data_normalized = f_data_filtered;
+    int f_data_length = f_id.size();
+    MatrixXd f_data_filtered = MatrixXd::Zero(6, f_data_length);
     for (int i = 0; i < f_data_length; ++i)
-      f_data_normalized.col(i).normalize();
+      f_data_filtered.col(i) = f_data.col(f_id[i]);
 
-    int kNFSamples = 100;
-    MatrixXd f_data_selected(6, DimF);
-    MatrixXd f_data_selected_new(6, DimF);
-    double f_distance = 0;
-    assert(f_data_length < 32767);
-    for (int i = 0; i < kNFSamples; ++i) {
-      // 1. sample
-      for (int s = 0; s < DimF; s++) {
-        int r = (rand() % f_data_length);
-        f_data_selected_new.col(s) = f_data_normalized.col(r);
-      }
-      // 2. compute distance
-      double f_distance_new = 0;
-      for (int ii = 0; ii < DimF-1; ++ii)
-        for (int jj = 0; jj < DimF-1-ii; ++jj)
-          f_distance_new += (f_data_selected_new.col(ii) -
-              f_data_selected_new.col(jj)).norm();
-      // 3. Update data
-      if (f_distance_new > f_distance) {
-        f_data_selected = f_data_selected_new;
-        f_distance = f_distance_new;
-      }
-    } // end sampling
+    int DimF = 0;
+    MatrixXd Nf;
+    MatrixXd f_data_selected;
+    if (f_data_length > 5) {
+      // SVD to filtered force data
+      Eigen::JacobiSVD<MatrixXd> svd_f(f_data_filtered.transpose(), Eigen::ComputeThinV);
+      VectorXd sigma_f = svd_f.singularValues();
+      // check dimensions, estimate natural constraints
+      double threshold = max(f_singular_value_threshold_, 0.1*sigma_f(0));
+      for (int i = 0; i < 6; ++i)
+        if (sigma_f(i) > threshold) DimF ++;
 
-    MatrixXd Nf(DimF, 6);
-    for (int i = 0; i < DimF; ++i)
-      Nf.row(i) = f_data_selected.col(i).transpose();
+      if (DimF > 3) {
+        cout << "DimF: " << DimF << endl;
+        cout << "Press Enter to continue" << endl;
+        getchar();
+      }
+      // MatrixXd N = SVD_V_f.block<6, DimF>(0, 0).transpose();
+      // Sample DimF force directions
+      MatrixXd f_data_normalized = f_data_filtered;
+      for (int i = 0; i < f_data_length; ++i)
+        f_data_normalized.col(i).normalize();
+
+      int kNFSamples = (int)pow(double(f_data_length), 0.7);
+      f_data_selected = MatrixXd(6, DimF);
+      if (DimF == 1) {
+        f_data_selected = f_data_filtered.rowwise().mean();
+        f_data_selected.normalize();
+      } else {
+        MatrixXd f_data_selected_new(6, DimF);
+        double f_distance = 0;
+        assert(f_data_length < 32767);
+        for (int i = 0; i < kNFSamples; ++i) {
+          // 1. sample
+          for (int s = 0; s < DimF; s++) {
+            int r = (rand() % f_data_length);
+            f_data_selected_new.col(s) = f_data_normalized.col(r);
+          }
+          // 2. compute distance
+          double f_distance_new = 0;
+          for (int ii = 0; ii < DimF-1; ++ii)
+            for (int jj = ii+1; jj < DimF; ++jj)
+              f_distance_new += (f_data_selected_new.col(ii) -
+                  f_data_selected_new.col(jj)).norm();
+          // 3. Update data
+          if (f_distance_new > f_distance) {
+            f_data_selected = f_data_selected_new;
+            f_distance = f_distance_new;
+          }
+        } // end sampling
+      }
+
+      // unscale
+      Nf = f_data_selected.transpose() * force_scale_matrix_inv_;
+    } else {
+      DimF = 0;
+      Nf = MatrixXd(0, 6);
+      f_data_selected = MatrixXd(6, 0);
+    }
 
     /* Do Hybrid Servoing */
 
@@ -150,8 +207,8 @@ bool PlaneEngaging::run() {
     int kDimLambda          = DimF;
 
     VectorXd F = VectorXd::Zero(6);
-    MatrixXd Aeq(1, 1); // dummy
-    VectorXd beq(1); // dummy
+    MatrixXd Aeq(0, DimF+6); // dummy
+    VectorXd beq(0); // dummy
     MatrixXd A = MatrixXd::Zero(DimF, DimF + 6);
     VectorXd b_A = VectorXd::Zero(DimF);
     A.leftCols(DimF) = -MatrixXd::Identity(DimF,DimF);
@@ -170,12 +227,6 @@ bool PlaneEngaging::run() {
     Vector6d v_Tr = Vector6d::Zero();
     for (int i = 0; i < action.n_av; ++i)  v_Tr(i+action.n_af) = action.w_av(i);
 
-    const double kVMax = 0.1; // m/s,  maximum speed limit
-    if (v_Tr.norm() > kVMax) {
-      v_Tr.normalize();
-      v_Tr *= kVMax;
-    }
-
     const double dt = 0.2; // s
     double pose_fb[7];
     robot_->getPose(pose_fb);
@@ -184,6 +235,16 @@ bool PlaneEngaging::run() {
     Matrix6d R_a = action.R_a;
     Matrix6d R_a_inv = R_a.inverse();
     Vector6d v_T = R_a_inv*v_Tr;
+    
+    const double kVMax = 0.002; // m/s,  maximum speed limit
+    const double scale_rot_to_tran = 0.5; // 1m = 2rad
+    Vector6d v_T_scaled = v_T;
+    v_T_scaled.tail(3) *= scale_rot_to_tran;
+    if (v_T_scaled.norm() > kVMax) {
+      double scale_safe = kVMax/v_T_scaled.norm();
+      v_T *= scale_safe;
+    }
+    
     Vector6d v_W = Adj_WT*v_T;
     Matrix4d SE3_WT_command;
     SE3_WT_command = SE3_WT_fb + wedge6(v_W)*SE3_WT_fb*dt;
@@ -193,22 +254,24 @@ bool PlaneEngaging::run() {
     Vector6d force_Tr_set = Vector6d::Zero();
     for (int i = 0; i < action.n_af; ++i)  force_Tr_set[i] = action.eta_af(i);
     Vector6d force_T = R_a_inv*force_Tr_set;
+    Matrix6d Adj_TW = SE32Adj(SE3Inv(SE3_WT_fb));
+    Vector6d force_W = Adj_TW.transpose() * force_T;
 
     cout << "\nSolved. Solution Action:" << endl;
     cout << "n_af: " << action.n_af << endl;
     cout << "n_av: " << action.n_av << endl;
-    cout << "force_Tr_set: " << force_Tr_set[0] << "|"
-                          << force_Tr_set[1] << "|"
-                          << force_Tr_set[2] << " || "
-                          << force_Tr_set[3] << "|"
-                          << force_Tr_set[4] << "|"
-                          << force_Tr_set[5] << endl;
-    cout << "Press Enter to begin motion!" << endl;
-    // getchar();
-    // cout << "motion begins:" << endl;
-    controller_->ExecuteHFVC(action.n_af, action.n_av,
-        action.R_a, pose_set, force_Tr_set,
-        HS_CONTINUOUS, main_loop_rate_);
+    cout << "V in world: " << v_W[0] << "|"
+                          << v_W[1] << "|"
+                          << v_W[2] << " || "
+                          << v_W[3] << "|"
+                          << v_W[4] << "|"
+                          << v_W[5] << endl;
+    cout << "F in world: " << force_W[0] << "|"
+                          << force_W[1] << "|"
+                          << force_W[2] << " || "
+                          << force_W[3] << "|"
+                          << force_W[4] << "|"
+                          << force_W[5] << endl;
 
     if (N_TRJ_ == 1) {
       // print to file
@@ -220,7 +283,7 @@ bool PlaneEngaging::run() {
         return false;
       }
       for (int i = 0; i < controller_->_f_queue.size(); ++i) {
-        stream_array_in(fp, _f_queue[i].data(), 6);
+        stream_array_in(fp, controller_->_f_queue[i].data(), 6);
         fp << endl;
       }
       fp.close();
@@ -231,7 +294,7 @@ bool PlaneEngaging::run() {
         return false;
       }
       for (int i = 0; i < controller_->_v_queue.size(); ++i) {
-        stream_array_in(fp, _v_queue[i].data(), 6);
+        stream_array_in(fp, controller_->_v_queue[i].data(), 6);
         fp << endl;
       }
       fp.close();
@@ -242,16 +305,7 @@ bool PlaneEngaging::run() {
         return false;
       }
       for (int i = 0; i < controller_->_f_weights.size(); ++i)
-        fp << _f_weights[i] << endl;
-      fp.close();
-      // v_weights
-      fp.open(folder_path_ + "plane_engaging/v_weights.txt");
-      if (!fp) {
-        cerr << "Unable to open file to write.";
-        return false;
-      }
-      for (int i = 0; i < controller_->_v_weights.size(); ++i)
-        fp << _v_weights[i] << endl;
+        fp << controller_->_f_weights[i] << endl;
       fp.close();
 
       // v_weights
@@ -261,7 +315,7 @@ bool PlaneEngaging::run() {
         return false;
       }
       for (int i = 0; i < controller_->_v_weights.size(); ++i)
-        fp << _v_weights[i] << endl;
+        fp << controller_->_v_weights[i] << endl;
       fp.close();
 
       // f_data_filtered
@@ -270,10 +324,7 @@ bool PlaneEngaging::run() {
         cerr << "Unable to open file to write.";
         return false;
       }
-      for (int i = 0; i < controller_->f_data_filtered.size(); ++i) {
-        stream_array_in(fp, f_data_filtered[i].data(), 6);
-        fp << endl;
-      }
+      fp << f_data_filtered.transpose() << endl;
       fp.close();
       // f_data_selected
       fp.open(folder_path_ + "plane_engaging/f_data_selected.txt");
@@ -281,10 +332,7 @@ bool PlaneEngaging::run() {
         cerr << "Unable to open file to write.";
         return false;
       }
-      for (int i = 0; i < controller_->f_data_selected.size(); ++i) {
-        stream_array_in(fp, f_data_selected[i].data(), 6);
-        fp << endl;
-      }
+      fp << f_data_selected.transpose() << endl;
       fp.close();
       // others
       fp.open(folder_path_ + "plane_engaging/process.txt");
@@ -292,11 +340,23 @@ bool PlaneEngaging::run() {
         cerr << "Unable to open file to write.";
         return false;
       }
-      fp << DimV << "\t" << DimF << endl;
+      fp << DimV << endl << DimF << endl;
       stream_array_in(fp, v_T.data(), 6);
       fp << endl;
       stream_array_in(fp, force_T.data(), 6);
       fp.close();
     }
+
+    if (std::isnan(force_Tr_set[0])) {
+      cout << "================== NaN =====================" << endl;
+      cout << "Press Enter to continue.." << endl;
+      getchar();
+    }
+
+    cout << "motion begins:" << endl;
+    controller_->ExecuteHFVC(action.n_af, action.n_av,
+        action.R_a, pose_set, force_Tr_set.data(),
+        HS_CONTINUOUS, main_loop_rate_);
+
   } // end for
 }

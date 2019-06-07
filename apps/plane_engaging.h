@@ -14,7 +14,7 @@ public:
   ~PlaneEngaging() override;
 
   bool initialize(const std::string& file_name,
-    const int main_loop_rate) override;
+    const int main_loop_rate, ros::NodeHandle& root_nh) override;
   bool run() override;
 
 private:
@@ -25,9 +25,9 @@ private:
   /* task description variables */
   Eigen::MatrixXd G_;
   Eigen::VectorXd b_G_;
-  double kTimeStepSec_;
   double v_singular_value_threshold_;
   double f_singular_value_threshold_;
+  Eigen::Matrix<double, 6, 6> force_scale_matrix_inv_;
 
   /* MISC */
   std::string folder_path_;
