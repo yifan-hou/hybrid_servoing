@@ -23,6 +23,7 @@ private:
   ForceControlController *controller_;
 
   /* task description variables */
+  int N_TRJ_;
   Eigen::MatrixXd G_;
   Eigen::VectorXd b_G_;
   double v_singular_value_threshold_;

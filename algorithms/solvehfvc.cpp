@@ -20,7 +20,7 @@ bool solvehfvc(const MatrixXd &N_ALL,
   const MatrixXd &A, const VectorXd &b_A,
   const int kDimActualized, const int kDimUnActualized,
   const int kDimSlidingFriction, const int kDimLambda,
-  const int kNumSeeds,
+  const int kNumSeeds, const int kPrintLevel,
   HFVC *action) {
 
   /* Size checking */
@@ -38,8 +38,10 @@ bool solvehfvc(const MatrixXd &N_ALL,
   assert(A.rows() == b_A.rows());
   assert(A.cols() == kDimContactForce + kDimGeneralized);
 
-  cout << "Begin solving for velocity commands" << endl;
-  cout << "  [1] Determine Possible Dimension of control" << endl;
+  if (kPrintLevel >= 2) {
+    cout << "Begin solving for velocity commands" << endl;
+    cout << "  [1] Determine Possible Dimension of control" << endl;
+  }
 
   MatrixXd N = N_ALL.topRows(kDimLambda);
   MatrixXd NG(N.rows()+G.rows(), N.cols());
@@ -65,7 +67,6 @@ bool solvehfvc(const MatrixXd &N_ALL,
 
   int n_av = rank_NG - rank_N;
   int n_af = kDimActualized - n_av;
-  cout << "   n_av = " << n_av << ", n_af = " << n_af << endl;
   assert(rank_N + kDimActualized >= kDimGeneralized);
 
   MatrixXd basis_c;
@@ -95,13 +96,14 @@ bool solvehfvc(const MatrixXd &N_ALL,
   MatrixXd T(kDimGeneralized, kDimGeneralized);
   VectorXd w_av;
   if (n_av == 0) {
-    cout << "  [2] No feasible velocity control can satisfy the goal" << endl;
+    if (kPrintLevel >= 2)
+      cout << "  [2] No feasible velocity control can satisfy the goal" << endl;
     R_a = MatrixXd::Identity(kDimActualized, kDimActualized);
     T = MatrixXd::Identity(kDimGeneralized, kDimGeneralized);
     w_av = VectorXd(0);
   } else {
-    cout << "  [2] Solving for Directions by PGD" << endl;
-
+    if (kPrintLevel >= 2)
+      cout << "  [2] Solving for Directions by PGD" << endl;
     assert(basis_c.norm() > 0.1);// this shouldn't happen
     int NIter   = 50;
     int n_c     = rank_NG - kDimUnActualized;
@@ -182,7 +184,8 @@ bool solvehfvc(const MatrixXd &N_ALL,
     w_av = C_best*v_star;
   }
 
-  cout << "Begin Solving for force commands." << endl;
+  if (kPrintLevel >= 2)
+    cout << "Begin Solving for force commands." << endl;
   // unactuated dimensions
   // H = [eye(kDimUnActualized), zeros(kDimUnActualized, kDimActualized)];
   MatrixXd H = MatrixXd::Zero(kDimUnActualized, kDimGeneralized);
@@ -273,20 +276,27 @@ bool solvehfvc(const MatrixXd &N_ALL,
   // read the results
   Eigen::IOFormat MatlabFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
       "]");
-  cout << "  QP Solved. cost = " << cost << endl;
-  // eta_af = x(n_free + n_dual_free + 1:end);
   VectorXd eta_af = x.segment(n_free+n_dual_free, n_af);
 
-  cout << "   Equality violation: " << (qpbeq - qpAeq*x).norm()
-      << endl;
 
-  float inequality_violation = 0;
+  float equality_violation = 0, inequality_violation = 0;
   if (qpA.rows() > 0) {
     VectorXd b_Ax = qpA*x - qpb;
     if (b_Ax.maxCoeff() > 0 ) inequality_violation = b_Ax.maxCoeff();
   }
-  cout << "   Inequality violation: " << inequality_violation
-      << endl;
+  equality_violation = (qpbeq - qpAeq*x).norm();
+
+  if (kPrintLevel == 2) {
+    cout << "  QP Solved. cost = " << cost << endl;
+    cout << "   Equality violation: " << equality_violation << endl;
+    cout << "   Inequality violation: " << inequality_violation << endl;
+    cout << "  n_av = " << n_av << ", n_af = " << n_af << endl;
+    cout << "Hybrid Servoing is finished." << endl;
+  } else if (kPrintLevel == 1) {
+    cout << "HFVC: n_av = " << n_av << ", n_af = " << n_af <<
+        ", constraint violation: " << equality_violation + inequality_violation
+        << endl;
+  }
 
   action->n_av   = n_av;
   action->n_af   = n_af;

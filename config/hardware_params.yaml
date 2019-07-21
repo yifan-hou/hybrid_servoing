@@ -6,22 +6,23 @@ netft_publish_rate: 1000
 netft_print_flag: false
 netft_file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/netft_data.txt"
 
+
 ati:
   offset: # will be added to the reading; in tool frame
-    fx: 0.577
-    fy: 2.27
-    fz: -2.37
-    tx: 0.235
-    ty: -0.117
-    tz: 0.00682
+    fx: 0.562
+    fy: 2.26
+    fz: -2.22
+    tx: 0.236
+    ty: -0.112
+    tz: 0.00436
   gravity:
-    x: -0.00521
-    y: 0.0116
-    z: -2.28
+    x: 0.0296
+    y: -0.00723
+    z: -2.26
   COM:
-    x: -0.000175
-    y: -7.69e-05
-    z: -0.0791
+    x: -3.04e-05
+    y: -0.000469
+    z: -0.0797
   safety:
     fx: 25 # maximum: 20
     fy: 25 # maximum: 20
@@ -53,7 +54,7 @@ egm_safety_zone:
   xmax: 280
   ymin: 240
   ymax: 550
-  zmin: 260
+  zmin: 220
   zmax: 600
 
 # force control

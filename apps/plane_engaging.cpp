@@ -74,6 +74,13 @@ bool PlaneEngaging::initialize(const std::string& file_name,
       "[/constraint_estimation/f_singular_value_threshold] not found, "
       "using default: " << f_singular_value_threshold_);
 
+  root_nh.param(string("/plane_engaging/Number_of_frames"),
+      N_TRJ_, 1);
+  if (!root_nh.hasParam("/plane_engaging/Number_of_frames"))
+      ROS_WARN_STREAM("Parameter "
+      "[/plane_engaging/Number_of_frames] not found, "
+      " using default: " << N_TRJ_);
+
   return true;
 }
 
@@ -96,7 +103,6 @@ bool PlaneEngaging::run() {
   }
 
   Timer timer;
-  int N_TRJ_ = 50; // 1000
   std::srand(std::time(0));
   for (int fr = 0; fr < N_TRJ_; ++fr) {
     timer.tic();
@@ -109,8 +115,6 @@ bool PlaneEngaging::run() {
       f_data.col(i) = controller_->_f_queue[i] * controller_->_f_weights[i];
     for (int i = 0; i < controller_->_v_queue.size(); ++i)
       v_data.col(i) = controller_->_v_queue[i] * controller_->_v_weights[i];
-    cout << "f_queue size: " << controller_->_f_queue.size() << endl;
-    cout << "f_data size: " << f_data.cols() << endl;
 
     // SVD on velocity data
     Eigen::JacobiSVD<MatrixXd> svd_v(v_data.transpose(), Eigen::ComputeThinV);
@@ -123,8 +127,7 @@ bool PlaneEngaging::run() {
     MatrixXd rowspace_v = svd_v.matrixV().leftCols(DimV);
 
     // filter out force data that:
-    //    1. aligns with row(v), or
-    //    2. has a small weight
+    //    1. has a small weight
     std::vector<int> f_id;
     for (int i = 0; i < f_data.cols(); ++i) {
       double length = f_data.col(i).norm();
@@ -198,13 +201,13 @@ bool PlaneEngaging::run() {
     }
 
     /* Do Hybrid Servoing */
-
     HFVC action;
     int kDimActualized      = 6;
     int kDimUnActualized    = 0;
     int kDimSlidingFriction = 0;
     int kNumSeeds           = 3;
     int kDimLambda          = DimF;
+    int kPrintLevel         = 1;
 
     VectorXd F = VectorXd::Zero(6);
     MatrixXd Aeq(0, DimF+6); // dummy
@@ -212,22 +215,20 @@ bool PlaneEngaging::run() {
     MatrixXd A = MatrixXd::Zero(DimF, DimF + 6);
     VectorXd b_A = VectorXd::Zero(DimF);
     A.leftCols(DimF) = -MatrixXd::Identity(DimF,DimF);
-    double kLambdaMin = 5.0;
-    for (int i = 0; i < DimF; ++i) b_A(i) = - kLambdaMin;
+    double kLambdaMin = 10.0;
+    for (int i = 0; i < DimF; ++i) b_A(i) = -kLambdaMin;
 
     solvehfvc(Nf, G_, b_G_, F, Aeq, beq, A, b_A,
       kDimActualized, kDimUnActualized,
       kDimSlidingFriction, kDimLambda,
-      kNumSeeds,
+      kNumSeeds, kPrintLevel,
       &action);
 
     double computation_time_ms = timer.toc();
-    cout << "\n\nComputation Time: " << computation_time_ms << endl;
     /*  Execute the hybrid action */
     Vector6d v_Tr = Vector6d::Zero();
     for (int i = 0; i < action.n_av; ++i)  v_Tr(i+action.n_af) = action.w_av(i);
 
-    const double dt = 0.2; // s
     double pose_fb[7];
     robot_->getPose(pose_fb);
     Matrix4d SE3_WT_fb = posemm2SE3(pose_fb);
@@ -235,7 +236,8 @@ bool PlaneEngaging::run() {
     Matrix6d R_a = action.R_a;
     Matrix6d R_a_inv = R_a.inverse();
     Vector6d v_T = R_a_inv*v_Tr;
-    
+
+    const double dt = 0.1; // s
     const double kVMax = 0.002; // m/s,  maximum speed limit
     const double scale_rot_to_tran = 0.5; // 1m = 2rad
     Vector6d v_T_scaled = v_T;
@@ -244,7 +246,7 @@ bool PlaneEngaging::run() {
       double scale_safe = kVMax/v_T_scaled.norm();
       v_T *= scale_safe;
     }
-    
+
     Vector6d v_W = Adj_WT*v_T;
     Matrix4d SE3_WT_command;
     SE3_WT_command = SE3_WT_fb + wedge6(v_W)*SE3_WT_fb*dt;
@@ -257,23 +259,13 @@ bool PlaneEngaging::run() {
     Matrix6d Adj_TW = SE32Adj(SE3Inv(SE3_WT_fb));
     Vector6d force_W = Adj_TW.transpose() * force_T;
 
-    cout << "\nSolved. Solution Action:" << endl;
-    cout << "n_af: " << action.n_af << endl;
-    cout << "n_av: " << action.n_av << endl;
-    cout << "V in world: " << v_W[0] << "|"
-                          << v_W[1] << "|"
-                          << v_W[2] << " || "
-                          << v_W[3] << "|"
-                          << v_W[4] << "|"
-                          << v_W[5] << endl;
-    cout << "F in world: " << force_W[0] << "|"
-                          << force_W[1] << "|"
-                          << force_W[2] << " || "
-                          << force_W[3] << "|"
-                          << force_W[4] << "|"
-                          << force_W[5] << endl;
+    printf("V in world: %.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n", v_W[0], v_W[1],
+        v_W[2],v_W[3],v_W[4],v_W[5]);
+    printf("F in world: %.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n", force_W[0],
+        force_W[1], force_W[2],force_W[3],force_W[4],force_W[5]);
+    cout << "Computation Time: " << computation_time_ms << endl << endl;
 
-    if (N_TRJ_ == 1) {
+    if (fr == N_TRJ_-1) {
       // print to file
       ofstream fp;
       // f_queue
@@ -356,7 +348,7 @@ bool PlaneEngaging::run() {
     cout << "motion begins:" << endl;
     controller_->ExecuteHFVC(action.n_af, action.n_av,
         action.R_a, pose_set, force_Tr_set.data(),
-        HS_CONTINUOUS, main_loop_rate_);
+        HS_CONTINUOUS, main_loop_rate_, dt);
 
   } // end for
 }
