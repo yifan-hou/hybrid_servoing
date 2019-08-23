@@ -1,27 +1,10 @@
-///
-/// Solve for hybrid force-velocity control actions
-///
-/// Input arguments
-///   required:
-///       Aeq, beq: Guard condition, Aeq*v = beq
-///       A, b_A: Guard condition, A*v <= b_A
-///       dims:
-///           dims.Actualized: number of actualized dimensions
-///           dims.UnActualized: number of unactualized dimensions
-///           dims.SlidingFriction: number of sliding friction dimensions
-///           dims.Lambda: number of reaction forces
-///
-///   optional:
-///       num_seeds: number of random initializations to try when solving for
-///               the velocity control
-/// Outputs
-///   n_av: number, dimensionality of velocity controlled actions
-///   n_af: number, dimensionality of force controlled actions
-///   R_a: (n_av+n_af)x(n_av+n_af) matrix, the transformation that describes the
-///           direction of velocity&force control actions
-///   w_av: n_av x 1 vector, magnitudes of velocity controls
-///   eta_af: n_af x 1 vector,  magnitudes of force controls
-
+/**
+ * Solver for hybrid servoing.
+ *
+ * Author:
+ *    Yifan Hou
+ *    <yifanh@cmu.edu>
+ */
 #include <Eigen/Geometry>
 
 

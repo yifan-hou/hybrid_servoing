@@ -1,72 +1,78 @@
-###################################################
-#       force control
-###################################################
-main_loop_rate: 400
-force_touch_threshold: 2
+##
+## Force control
+##
+forcecontrol:
+  main_loop_rate: 400 #500
+  # Admittance control parameters for the pseudo spring-mass-damper system
+  # Be careful with Trade-off between length and angle
+  # Assume length is 0.1, then:
+  #   stiffness for rotation should be multiplied with 0.1, so as to feel the same
+  #   Inertia entries for rotation should be multiplied with 0.01
+  #   Damping coefficient for rotation should be multiplied with 0.1
+  # The following parameters are the diagonal elements of the 6x6 matrices
+  #   Stiffness matrix as viewed in tool frame
+  Stiffness_matrix_diag_elements: [0.2, 0.2, 0.2, 0.5, 0.5, 0.5]
+  #   Inertia matrix as viewed in tool frame
+  Inertia_matrix_diag_elements: [1, 1, 1, 0.005, 0.005, 0.005]
+  #   Damping coefficient matrix as viewed in tool frame
+  Damping_wrench_limit: [20, 20, 20, 0.8, 0.8, 0.8]
+  # Force control PID Gains
+  # one set for translation, another set for rotation
+  FC_gains:
+    IGainT: 0.005 # 0.02
+    PGainT: -0.8 #0.5
+    DGainT: 0.00 #0.00
+    IGainR: 0.005 # 0.02
+    PGainR: -0.8 #0.5
+    DGainR: 0.00 #0.00
+  FC_I_Limit_T_6D: [50, 50, 50, 0.5, 0.5, 0.5] # Newton, N*m
+  print_flag: true
+  file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/forcecontrol_data.txt"
 
-# Admittance control parameters for the pseudo spring-mass-damper system
-# Be careful with Trade-off between length and angle
-# Assume length is 0.1, then:
-#   stiffness for rotation should be multiplied with 0.1, so as to feel the same
-#   Inertia entries for rotation should be multiplied with 0.01
-#   Damping coefficient for rotation should be multiplied with 0.1
-# The following parameters are the diagonal elements of the 6x6 matrices
-#   Stiffness matrix as viewed in tool frame
-Stiffness_matrix_diag_elements: [0.2, 0.2, 0.2, 0.5, 0.5, 0.5]
-# Stiffness_matrix_diag_elements: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
-#   Inertia matrix as viewed in tool frame
-Inertia_matrix_diag_elements: [1, 1, 1, 0.005, 0.005, 0.005]
-# Inertia_matrix_diag_elements: [1, 1, 1, 0.005, 0.005, 0.005]
-#   Damping coefficient matrix as viewed in tool frame
-Damping_matrix_diag_elements: [15, 15, 15, 0.15, 0.15, 0.15]
-# Damping_matrix_diag_elements: [15, 15, 15, 0.15, 0.15, 0.15]
-#   Limit the damping force to avoid instability
-Damping_wrench_limit: [20, 20, 20, 0.8, 0.8, 0.8]
-
-# Force control PID Gains
-# one set for translation, another set for rotation
-FC_gains:
-  IGainT: 0.005 # 0.02
-  PGainT: -0.8 #0.5
-  DGainT: 0.00 #0.00
-  IGainR: 0.005 # 0.02
-  PGainR: -0.8 #0.5
-  DGainR: 0.00 #0.00
-FC_I_Limit_T_6D: [50, 50, 50, 0.5, 0.5, 0.5] # Newton, N*m
-
-
-forcecontrol_print_flag: true
-forcecontrol_file_path: "/home/yifanh/Git/catkin_ws/src/forcecontrol/data/forcecontrol_data.txt"
-
-# motion planning speed limit
-vel_max_translation: 80 # mm/s
-acc_max_translation: 1000 # mm/s^2
-vel_max_rotation: 0.6 # rad/s
-acc_max_rotation: 10 # rad/s^2
+##
+## Trapezodial motion planning
+##
+trapezodial:
+  vel_max_translation: 80 # mm/s
+  acc_max_translation: 1000 # mm/s^2
+  vel_max_rotation: 0.6 # rad/s
+  acc_max_rotation: 10 # rad/s^2
 
 
-###################################################
-#       robot_bridge
-###################################################
+##
+## Robot bridge
+##
 robot_bridge:
-    default_pose: # when tool frame is set for probe
-      x: 40
-      y: 352
-      z: 260
-      qw: 0
-      qx: 1
-      qy: 0
-      qz: 0
+  force_touch_threshold: 2
+  pose_set_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/pose_set.txt";
+  velocity_set_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/velocity_set.txt";
+  # pose_feedback_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/pose_feedback.txt";
+  task_data_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/";
 
-# experimental
+  default_pose: # when tool frame is set for probe
+    x: 40
+    y: 352
+    z: 260
+    qw: 0
+    qx: 1
+    qy: 0
+    qz: 0
+
+##
+## Experimental
+##
 constraint_estimation:
-    pool_duration: 0.2 #s
-    scale_force_vector: [1, 1, 1, 10, 10, 10] # Newton, N*m
-    scale_vel_vector: [1, 1, 1, 0.5, 0.5, 0.5] # m/s, rad/s
-    var_force: 1.5 # variance of force magnitude after scaling
-    var_velocity: 0.005 # variance of velocity magnitude after scaling
-    v_singular_value_threshold: 0.5
-    f_singular_value_threshold: 0.1
+  pool_duration: 0.2 #s
+  scale_force_vector: [1, 1, 1, 10, 10, 10] # Newton, N*m
+  scale_vel_vector: [1, 1, 1, 0.5, 0.5, 0.5] # m/s, rad/s
+  var_force: 1.5 # variance of force magnitude after scaling
+  var_velocity: 0.005 # variance of velocity magnitude after scaling
+  v_singular_value_threshold: 0.5
+  f_singular_value_threshold: 0.1
+
+
+
+
 
 # plane engaging
 plane_engaging:
