@@ -1,17 +1,15 @@
-#include <apps/plane_engaging.h>
+#include "plane_engaging.h"
 
 #include <ctime>    // For time()
 #include <cstdlib>  // For srand() and rand()
 #include <Eigen/SVD>
 
-#include "algorithms/solvehfvc.h"
-#include "yifanlibrary/utilities.h"
-#include "yifanlibrary/TimerLinux.h"
+#include <solvehfvc.h>
+#include <RobotUtilities/utilities.h>
+#include <RobotUtilities/TimerLinux.h>
 
-using namespace UT;
+using namespace RUT;
 
-Eigen::IOFormat MatlabFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
-      "]");
 
 PlaneEngaging::PlaneEngaging(ForceControlHardware *robot,
         ForceControlController *controller) {
@@ -348,7 +346,7 @@ bool PlaneEngaging::run() {
     cout << "motion begins:" << endl;
     controller_->ExecuteHFVC(action.n_af, action.n_av,
         action.R_a, pose_set, force_Tr_set.data(),
-        HS_CONTINUOUS, main_loop_rate_, dt);
+        HS_CONTINUOUS, main_loop_rate_);
 
   } // end for
 }

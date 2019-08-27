@@ -1,5 +1,0 @@
-<launch>
-  <rosparam file="$(find force_control_bridge_ros)/config/hardware_params.yaml" command="load"/>
-  <rosparam file="$(find force_control_bridge_ros)/config/controllers.yaml" command="load"  />
-  <node pkg="force_control_bridge_ros" name="force_control_bridge_ros_node" type="force_control_bridge_ros_node"  output="screen" ns="robot_bridge" />
-</launch>

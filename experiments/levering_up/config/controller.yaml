@@ -44,11 +44,10 @@ trapezodial:
 ##
 robot_bridge:
   force_touch_threshold: 2
-  pose_set_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/pose_set.txt";
-  velocity_set_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/velocity_set.txt";
-  # pose_feedback_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/pose_feedback.txt";
-  task_data_file_path: "/usr0/home/yifanh/Git/hybrid-force-velocity-control/results/";
-
+  pose_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid-servoing/experiments/levering_up/data/pose_set.txt";
+  velocity_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid-servoing/experiments/levering_up/data/velocity_set.txt";
+  pose_feedback_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid-servoing/experiments/levering_up/data/pose_feedback.txt";
+  task_data_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid-servoing/experiments/levering_up/data/";
   default_pose: # when tool frame is set for probe
     x: 40
     y: 352

@@ -1,27 +1,28 @@
+#include "robot_bridge.h"
+
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
 #include <mutex>
 
 #include <Eigen/Geometry>
-#include <std_srvs/Empty.h>
 
-#include "RobotUtilities/utilities.h"
-
-// const string _pose_set_file_path = "/usr0/home/yifanh/Git/"
-//     "hybrid-force-velocity-control/results/pose_set.txt";
-// const string _velocity_set_file_path = "/usr0/home/yifanh/Git/"
-//     "hybrid-force-velocity-control/results/velocity_set.txt";
-// const string _pose_feedback_file_path = "/usr0/home/yifanh/Git/"
-//     "hybrid-force-velocity-control/results/pose_feedback.txt";
-// const string _task_data_file_path = "/usr0/home/yifanh/Git/"
-//     "hybrid-force-velocity-control/results/";
+#include <RobotUtilities/utilities.h>
 
 using namespace std;
 using namespace Eigen;
 
-int RobotBridge::init(ros::NodeHandle *ros_handle, Clock time0){
-  ros_handle_p = ros_handle;
+RobotBridge::RobotBridge() {
+  _default_pose = new double[7];
+}
+
+RobotBridge::~RobotBridge() {
+  delete [] _default_pose;
+}
+
+int RobotBridge::init(ros::NodeHandle *ros_handle, Clock::time_point time0,
+    FTInterfaces *ft, RobotInterfaces *robot){
+  _ros_handle_p = ros_handle;
 
   ROS_INFO_STREAM("robot_bridge server is starting");
 
@@ -44,9 +45,9 @@ int RobotBridge::init(ros::NodeHandle *ros_handle, Clock time0){
   ros_handle->param(std::string("/robot_bridge/velocity_set_file_path"), _velocity_set_file_path, std::string("/tmp"));
   if (!ros_handle->hasParam("/robot_bridge/velocity_set_file_path"))
     ROS_WARN_STREAM("Parameter [/robot_bridge/velocity_set_file_path] not found");
-  // ros_handle->param(std::string("/robot_bridge/pose_feedback_file_path"), _pose_feedback_file_path, std::string("/tmp"));
-  // if (!ros_handle->hasParam("/robot_bridge/pose_feedback_file_path"))
-  //   ROS_WARN_STREAM("Parameter [/robot_bridge/pose_feedback_file_path] not found");
+  ros_handle->param(std::string("/robot_bridge/pose_feedback_file_path"), _pose_feedback_file_path, std::string("/tmp"));
+  if (!ros_handle->hasParam("/robot_bridge/pose_feedback_file_path"))
+    ROS_WARN_STREAM("Parameter [/robot_bridge/pose_feedback_file_path] not found");
   ros_handle->param(std::string("/robot_bridge/task_data_file_path"), _task_data_file_path, std::string("/tmp"));
   if (!ros_handle->hasParam("/robot_bridge/task_data_file_path"))
     ROS_WARN_STREAM("Parameter [/robot_bridge/task_data_file_path] not found");
@@ -81,25 +82,27 @@ int RobotBridge::init(ros::NodeHandle *ros_handle, Clock time0){
     // --------------------------------------------------------
     // Initialize robot and forcecontroller
     // --------------------------------------------------------
-    _robot.init(*ros_handle, time0); // robot must be initialized before controller
-    _controller.init(*ros_handle, &robot, time0);
+    _robot.init(*ros_handle, time0, ft, robot); // robot must be initialized before controller
+    _controller.init(*ros_handle, &_robot, time0);
     _controller.reset();
-    // --------------------------------------------------------
-    // Establish Services
-    // --------------------------------------------------------
-    ros::ServiceServer reset_service            = ros_handle->advertiseService("reset", RobotBridge::SrvReset, this);
-    ros::ServiceServer move_tool_service        = ros_handle->advertiseService("move_tool", RobotBridge::SrvMoveTool, this);
-    // ros::ServiceServer move_hybrid_service      = ros_handle->advertiseService("move_hybrid", RobotBridge::SrvHybridServo, this);
-    ros::ServiceServer move_until_touch_service = ros_handle->advertiseService("move_until_touch", RobotBridge::SrvMoveUntilTouch, this);
-    ros::ServiceServer get_pose_service         = ros_handle->advertiseService("get_pose", RobotBridge::SrvGetPose, this);
-
-    cout << endl << "[robot_bridge] Initialization is done. Service servers are listening.." << endl;
-    ros::spin();
-
-    ROS_INFO_STREAM(endl << "[MAIN] Rest in Peace." << endl);
-
     return 0;
   }
+
+bool RobotBridge::hostServices() {
+  // --------------------------------------------------------
+  // Establish Services
+  // --------------------------------------------------------
+  ros::ServiceServer reset_service            = _ros_handle_p->advertiseService("reset", &RobotBridge::SrvReset, this);
+  ros::ServiceServer move_tool_service        = _ros_handle_p->advertiseService("move_tool", &RobotBridge::SrvMoveTool, this);
+  ros::ServiceServer move_until_touch_service = _ros_handle_p->advertiseService("move_until_touch", &RobotBridge::SrvMoveUntilTouch, this);
+  ros::ServiceServer get_pose_service         = _ros_handle_p->advertiseService("get_pose", &RobotBridge::SrvGetPose, this);
+
+  cout << endl << "[robot_bridge] Initialization is done. Service servers are listening.." << endl;
+  ros::spin();
+
+  ROS_INFO_STREAM(endl << "[MAIN] Rest in Peace." << endl);
+  return true;
+}
 
 bool RobotBridge::SrvReset(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
@@ -118,7 +121,7 @@ bool RobotBridge::SrvReset(std_srvs::Empty::Request  &req,
   cout << "Moving to reset location.." << endl;
   ros::Rate pub_rate(_main_loop_rate);
   for (int i = 0; i < num_of_steps; ++i) {
-    _robot.setControl(pose_traj.col(i).data());
+    _robot.setPose(pose_traj.col(i).data());
     pub_rate.sleep();
   }
 
@@ -162,13 +165,13 @@ bool RobotBridge::SrvMoveTool(std_srvs::Empty::Request  &req,
   _robot.getPose(pose);
 
   MatrixXd pose_traj;
-  UT::MotionPlanningTrapezodial(pose, pose_set, _kAccMaxTrans, _kVelMaxTrans,
+  RUT::MotionPlanningTrapezodial(pose, pose_set, _kAccMaxTrans, _kVelMaxTrans,
     _kAccMaxRot, _kVelMaxRot, (double)_main_loop_rate, &pose_traj);
   int num_of_steps = pose_traj.cols();
 
   ros::Rate pub_rate(_main_loop_rate);
   for (int i = 0; i < num_of_steps; ++i) {
-    _robot.setControl(pose_traj.col(i).data());
+    _robot.setPose(pose_traj.col(i).data());
     pub_rate.sleep();
   }
   cout << "[robot_bridge] MoveTool finished. " << endl;
@@ -212,8 +215,8 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
   _robot.getPose(pose);
   Eigen::Vector3d p_set, v_delta;
   p_set << pose[0], pose[1], pose[2];
-  v_delta = v_set/double(main_loop_rate);
-  ros::Rate pub_rate(main_loop_rate);
+  v_delta = v_set/double(_main_loop_rate);
+  ros::Rate pub_rate(_main_loop_rate);
 
   double wrench[6];
   double wrench_safety_check[3] = {0, 0, 0};
@@ -251,7 +254,7 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
     pose[1] = p_set(1);
     pose[2] = p_set(2);
 
-    _robot.setControl(pose);
+    _robot.setPose(pose);
     pub_rate.sleep();
   }
 
@@ -272,7 +275,7 @@ bool RobotBridge::SrvGetPose(std_srvs::Empty::Request  &req,
   ROS_INFO("Writing pose to the file..\n");
 
   ofstream fp;
-  fp.open(_POSE_FEEDBACK_FILE_PATH);
+  fp.open(_pose_feedback_file_path);
 
   if (!fp) {
     cerr << "Unable to open file for fp'.";

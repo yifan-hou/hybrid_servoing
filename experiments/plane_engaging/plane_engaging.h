@@ -5,16 +5,18 @@
 #include <Eigen/Geometry>
 #include <Eigen/Dense>
 
-#include <apps/hybrid_servoing_tasks.h>
+#include <robot_bridge.h>
 
-class PlaneEngaging : public HybridServoingTask {
+
+
+class PlaneEngaging : public RobotBridge {
 public:
   PlaneEngaging(ForceControlHardware *robot,
     ForceControlController *controller);
   ~PlaneEngaging() override;
 
   bool initialize(const std::string& file_name,
-    const int main_loop_rate, ros::NodeHandle& root_nh) override;
+    const int main_loop_rate, ros::NodeHandle& root_nh);
   bool run() override;
 
 private:

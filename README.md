@@ -1,9 +1,15 @@
-A framework for testing forcecontrol tasks/algorithms. Serve as a bridge between low level forcecontrol and high level Matlab GUI commands.
+# Hybrid Servoing
+A package for computing hybrid force-velocity control actions to execute a contact-rich motion plan robustly.
 
-# Key components
-robot_bridge.cpp: A server that communicates with Matlab GUI by ros service and file IO. Provides services for motion primitives and tasks. Call forcecontrol internally.
+**Reference**
 
-hybrid_servoing_tasks: One task class for each specific task.
+Yifan Hou, and Matthew T. Mason, " Robust Execution of Contact-Rich Motion Plans by Hybrid Force-Velocity Control“, IEEE International Conference on Robotics and Automation (ICRA) 2019.
+# Dependency
+YAML support for matlab:
+    https://github.com/ewiger/yamlmatlab
 
-solvehfvc: C++ implementation of hybrid servoing algorithm.
-eiquadprog.hpp: C++ implementation of quadratic programming.
+
+## Contents
+* */algorithm* Implementation of the hybrid servoing algorithm, in both matlab and c++.
+* */examples/* Examples of solving contact-rich manipulation problems in Matlab.
+* */experiments/* Run experiments of the examples. Use Matlab GUI with c++ solver.

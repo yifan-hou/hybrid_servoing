@@ -1,11 +1,24 @@
+#include <chrono>
+#include <mutex>
+#include <ros/ros.h>
+#include <std_srvs/Empty.h>
+
+#include <forcecontrol/forcecontrol_hardware.h>
+#include <forcecontrol/forcecontrol_controller.h>
+
 typedef std::chrono::high_resolution_clock Clock;
+
+Eigen::IOFormat MatlabFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
+      "]");
 
 class RobotBridge {
 public:
   RobotBridge();
   ~RobotBridge();
 
-  int init(ros::NodeHandle *ros_handle, Clock time0);
+  int init(ros::NodeHandle *ros_handle, Clock::time_point time0, FTInterfaces *ft,
+      RobotInterfaces *robot);
+  bool hostServices();
 
   // service call-backs
   bool SrvReset(std_srvs::Empty::Request  &req,
@@ -23,7 +36,7 @@ public:
   // parameters from parameter server
   int _main_loop_rate;
   double _force_touch_threshold;
-  double _default_pose[7];
+  double *_default_pose;
   double _kVelMaxTrans;
   double _kAccMaxTrans;
   double _kVelMaxRot;
@@ -31,14 +44,14 @@ public:
   std::string _pose_set_file_path;
   std::string _velocity_set_file_path;
   std::string _task_data_file_path;
-  // std::string POSE_FEEDBACK_FILE_PATH;
+  std::string _pose_feedback_file_path;
 
   // Handles
-  ros::NodeHandle *_ros_handle_p;
+  ros::NodeHandle *_ros_handle_p = nullptr;
   ForceControlHardware _robot;
   ForceControlController _controller;
 
   // misc
-  mutex _mtx;
+  std::mutex _mtx;
 
 };
