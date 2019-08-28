@@ -31,7 +31,7 @@ bool LeveringUpTaskServer::initLeveringUpTaskServer() {
     exit(1);
   }
 
-  _ros_handle_p->param(std::string("/task/goal_rotation_angle_deg"), _kGoalTheta, 45.0);
+  _ros_handle_p->param(std::string("/task/goal_rotation_angle_deg"), _kGoalThetaDeg, 45.0);
   if (!_ros_handle_p->hasParam("/task/goal_rotation_angle_deg"))
     ROS_WARN_STREAM("Parameter [/task/goal_rotation_angle_deg] not found");
   _ros_handle_p->param(std::string("/task/time_step"), _kTimeStepSec, 0.1);
@@ -74,8 +74,6 @@ bool LeveringUpTaskServer::initLeveringUpTaskServer() {
   if (!_ros_handle_p->hasParam("/task/hand_height0"))
     ROS_WARN_STREAM("Parameter [/task/hand_height0] not found");
 
-  _kGoalTheta *= PI/180.0;
-
   return true;
 }
 
@@ -103,7 +101,7 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
   _robot.getPose(pose); // get quaternion
   Eigen::Vector2d p_WH0, p_WO0;
   p_WH0 << pose[1]/1000.0, pose[2]/1000;
-  p_WO0[0] = p_WH0[0] - (6.5 + _kObjectLength/2);
+  p_WO0[0] = p_WH0[0] - (6.5/1000.0 + _kObjectLength/2);
   p_WO0[1] = p_WH0[1] - (_kHandHeight0 - _kObjectThickness/2);
 
   // dimensions
@@ -115,7 +113,7 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
   int kPrintLevel         = 1;
 
   int kDimGeneralized = kDimActualized + kDimUnActualized;
-  double a = p_WH0(1) - p_WO0(1) + _kObjectThickness*0.5f;
+  double a = p_WH0(1) - p_WO0(1) + _kObjectThickness*0.5;
   double b = _kObjectLength;
   double l_diagonal = std::sqrt(_kObjectThickness*_kObjectThickness +
       _kObjectLength*_kObjectLength);
@@ -124,7 +122,6 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
   Vector2d p_OTC, p_OBC;
   p_OTC << -_kObjectLength*0.5, -_kObjectThickness*0.5;
   p_OBC << -_kObjectLength*0.5, _kObjectThickness*0.5;
-  MatrixXd Omega = MatrixXd::Identity(5, 5);
   VectorXd F(5);
   double kGravityConstant = 9.8;
   F << 0, -_kObjectMass*kGravityConstant, 0, 0, -_kHandMass*kGravityConstant;
@@ -143,8 +140,8 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     // feedback
     _robot.getPose(pose); // get quaternion
     Vector2d p_WH;
-    p_WH(0) = pose[1]*0.001f; // m
-    p_WH(1) = pose[2]*0.001f;
+    p_WH(0) = pose[1]*0.001; // m
+    p_WH(1) = pose[2]*0.001;
 
     // 1. Solve for theta
     //   This is a a*sin(theta)+bsin(theta)=c problem
@@ -154,7 +151,7 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     double theta = theta_plus_phi - phi;
     cout << "a = " << a << ", b = " << b << ", theta = " << theta*180.0/PI
         << " degree" << endl;
-    if (theta > _kGoalTheta) {
+    if (theta*180.0/PI > _kGoalThetaDeg) {
       cout << "Goal theta achieved. Exiting.." << endl;
       break;
     }
@@ -166,7 +163,7 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     p_temp <<
         _kObjectThickness*std::sin(theta)+l_diagonal*0.5*cos(theta+angle_inner_sharp),
         l_diagonal*0.5*std::sin(theta+angle_inner_sharp);
-    p_WO = p_WO0;
+    p_WO    = p_WO0;
     p_WO(0) -= _kObjectLength*0.5;
     p_WO(1) -= _kObjectThickness*0.5;
     p_WO    += p_temp;
@@ -238,7 +235,15 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
         Jac_phi_q(i,j) = J_array[j*6 + i];
 
     HFVC action;
-    solvehfvc(Jac_phi_q*Omega, G, b_G, F, Aeq, beq,
+    // cout << "Jac: \n" << Jac_phi_q.format(MatlabFmt) << endl;
+    // cout << "G: \n" << G.format(MatlabFmt) << endl;
+    // cout << "b_G: \n" << b_G.format(MatlabFmt) << endl;
+    // cout << "F: \n" << F.format(MatlabFmt) << endl;
+    // cout << "Aeq: \n" << Aeq.format(MatlabFmt) << endl;
+    // cout << "beq: \n" << beq.format(MatlabFmt) << endl;
+    // cout << "A: \n" << A.format(MatlabFmt) << endl;
+    // cout << "b_A: \n" << b_A.format(MatlabFmt) << endl;
+    solvehfvc(Jac_phi_q, G, b_G, F, Aeq, beq,
       A, b_A,
       kDimActualized, kDimUnActualized,
       kDimSlidingFriction, kDimLambda,
@@ -254,11 +259,14 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     // pose command
     Vector2d vel_command;
     vel_command << VectorXd::Zero(action.n_af), action.w_av;
-    Vector6d vel_W;
+    Vector6d vel_W = Vector6d::Zero();
     vel_W.block<2,1>(1, 0) = action.R_a.inverse()*vel_command;
     cout << " World frame velocity: " << vel_W.format(MatlabFmt) << endl;
     double pose_set[7];
     _robot.getPose(pose_set); // get quaternion
+    Vector2d delta_pose;
+    delta_pose(0) += vel_W(1)*_kTimeStepSec*1000.0f;
+    delta_pose(1) += vel_W(2)*_kTimeStepSec*1000.0f;
     pose_set[1] = pose_set[1] + vel_W(1)*_kTimeStepSec*1000.0f;
     pose_set[2] = pose_set[2] + vel_W(2)*_kTimeStepSec*1000.0f;
 
@@ -286,12 +294,15 @@ bool LeveringUpTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     int n_af = action.n_af;
     int n_av = action.n_av + 4;
 
-
     /*  Execute the hybrid action */
+    cout << "delta_pose: " << delta_pose(0) << ", " << delta_pose(1) << endl;
+    // cout << "[levering_up] Press Enter to move\n";
+    // getchar();
     cout << "motion begins:" << endl;
-    _controller.ExecuteHFVC(n_af, n_av,
-        T_T, pose_set, force_set,
-        HS_CONTINUOUS, _main_loop_rate);
+    if (!_controller.ExecuteHFVC(n_af, n_av, T_T, pose_set, force_set,
+        HS_CONTINUOUS, _main_loop_rate, _kTimeStepSec)) {
+      ROS_WARN_STREAM("[LeveringUpTaskServer] unsafe motion. Stopped prematurely.");
+    }
   }
-
+  return true;
 }

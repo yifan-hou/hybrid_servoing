@@ -29,22 +29,26 @@ addpath generated
 %       normal force upper limit
 % 3. for sliding friciton, friciton coefficient should use upper bound
 
+config = yaml.ReadYaml('../../experiments/levering_up/config/task.yaml');
+
 % weight
-kObjectMass = 0.12;
-kHandMass = 0.0;
+kObjectMass = config.task.object_mass;
+kHandMass = config.task.hand_mass;
 kGravityConstant = 9.8;
 
 % length
-kObjectLength = 0.1;
-kObjectThickness = 0.02;
+kObjectLength = config.task.object_length;
+kObjectThickness = config.task.object_thickness;
 
 % friction
-kFrictionCoefficientTable = 0.4; % upper bound to ensure sliding
-kFrictionCoefficientHand = 0.7; % lower bound to ensure sticking
-kFrictionCoefficientBin = 0.4; % upper bound to ensure sliding
-kMinNormalForce = 5; % Newton
-kMinNormalForceSliding = -5; % Newton
-kMaxNormalForceSliding = 100; % Newton
+kFrictionCoefficientTable = config.task.friction_coef.table_object; % upper bound to ensure sliding
+kFrictionCoefficientHand = config.task.friction_coef.hand_object; % lower bound to ensure sticking
+kFrictionCoefficientBin = config.task.friction_coef.bin_object; % upper bound to ensure sliding
+kMinNormalForce = config.task.min_normal_force_sticking; % Newton
+kMinNormalForceSliding = config.task.min_normal_force_sliding; % Newton
+kMaxNormalForceSliding = config.task.max_normal_force_sliding; % Newton
+
+kGoalRotationVelocity = config.task.goal_rotation_velocity; % rad
 
 % dimensions
 kDimGeneralized = 5;
@@ -53,7 +57,6 @@ kDimActualized = 2;
 kDimLambda = 4;
 kDimSlidingFriction = 2;
 
-kGoalRotationVelocity = 0.5; % rad
 
 % inputs
 if nargin == 0
@@ -62,7 +65,7 @@ if nargin == 0
 
     % initial poses
     p_WH0 = [kObjectLength, kObjectThickness/2]';
-    p_WO0 = [kObjectLength/2, kObjectThickness/2]';
+    p_WO0 = [kObjectLength/2 - 0.0065, kObjectThickness/2-0.003]';
 else
     % feedback
     p_WH = inputs.p_WH;
@@ -71,6 +74,7 @@ else
     p_WH0 = inputs.p_WH0;
     p_WO0 = inputs.p_WO0;
 end
+
 
 % compute object pose
 %   Ideally we should use perception; here we hack it by assuming the

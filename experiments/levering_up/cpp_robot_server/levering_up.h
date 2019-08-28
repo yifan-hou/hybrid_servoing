@@ -17,8 +17,7 @@ public:
 private:
 
   // parameters
-  int _main_loop_rate;
-  double _kGoalTheta;
+  double _kGoalThetaDeg;
   double _kTimeStepSec;
   double _kObjectMass;
   double _kHandMass;

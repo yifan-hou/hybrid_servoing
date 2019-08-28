@@ -19,6 +19,7 @@ include_directories(
 find_library(TIMER_LIB TimerLinux HINTS /usr/local/lib/RobotUtilities)
 find_library(RUT Utilities HINTS /usr/local/lib/RobotUtilities)
 
+catkin_package()
 
 ##
 ## Build

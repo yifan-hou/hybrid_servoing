@@ -147,7 +147,6 @@ function BTN_EXP_Engage_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 global move_until_touch_client get_robot_pose_client
-global config
 
 velocity_set = 10*[0 -1 0]'; % mm/s
 fp = fopen('../data/velocity_set.txt','w');
@@ -158,7 +157,6 @@ call(move_until_touch_client);
 
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
-set(handles.BTN_EXP_read_obj_pose, 'Enable', 'off');
 set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
 set(handles.BTN_EXP_Engage, 'Enable', 'on');
 set(handles.BTN_EXP_Planning, 'Enable', 'on');
@@ -212,7 +210,6 @@ call(reset_client);
 
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
-set(handles.BTN_EXP_read_obj_pose, 'Enable', 'on');
 set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
 set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');

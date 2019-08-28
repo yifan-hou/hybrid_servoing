@@ -8,8 +8,10 @@
 #include <Eigen/Geometry>
 
 #include <RobotUtilities/utilities.h>
+#include <RobotUtilities/TimerLinux.h>
 
 using namespace std;
+using namespace RUT;
 using namespace Eigen;
 
 RobotBridge::RobotBridge() {
@@ -120,9 +122,13 @@ bool RobotBridge::SrvReset(std_srvs::Empty::Request  &req,
 
   cout << "Moving to reset location.." << endl;
   ros::Rate pub_rate(_main_loop_rate);
+  Timer timer;
+  timer.tic();
   for (int i = 0; i < num_of_steps; ++i) {
     _robot.setPose(pose_traj.col(i).data());
     pub_rate.sleep();
+    cout << "Time: " << timer.toc() << endl;
+    timer.tic();
   }
 
   cout << "[robot_bridge] Reset is done." << endl;
@@ -165,14 +171,22 @@ bool RobotBridge::SrvMoveTool(std_srvs::Empty::Request  &req,
   _robot.getPose(pose);
 
   MatrixXd pose_traj;
-  RUT::MotionPlanningTrapezodial(pose, pose_set, _kAccMaxTrans, _kVelMaxTrans,
-    _kAccMaxRot, _kVelMaxRot, (double)_main_loop_rate, &pose_traj);
-  int num_of_steps = pose_traj.cols();
+
+  int num_of_steps = round(double(_main_loop_rate) * 1.0);
+  RUT::MotionPlanningLinear(pose, pose_set, num_of_steps, &pose_traj);
+
+  // RUT::MotionPlanningTrapezodial(pose, pose_set, _kAccMaxTrans, _kVelMaxTrans,
+  //   _kAccMaxRot, _kVelMaxRot, (double)_main_loop_rate, &pose_traj);
+  // int num_of_steps = pose_traj.cols();
 
   ros::Rate pub_rate(_main_loop_rate);
+  Timer timer;
+  timer.tic();
   for (int i = 0; i < num_of_steps; ++i) {
     _robot.setPose(pose_traj.col(i).data());
     pub_rate.sleep();
+    cout << "Time: " << timer.toc() << endl;
+    timer.tic();
   }
   cout << "[robot_bridge] MoveTool finished. " << endl;
 

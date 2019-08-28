@@ -23,7 +23,7 @@ R_WO = R_WO(2:3, 2:3);
 % all the holonomic constraints
 holonomic_constraint = sym('Phi', [6, 1], 'real');
 % Hand contact
-holonomic_constraint(1:2) = R_WO'*p_WH - p_WO - p_OHC;
+holonomic_constraint(1:2) = R_WO'*(p_WH - p_WO) - p_OHC;
 % table non-penetration
 holonomic_constraint(3) = [0 1] * (R_WO*p_OTC+p_WO);
 % bin wall non-penetration
