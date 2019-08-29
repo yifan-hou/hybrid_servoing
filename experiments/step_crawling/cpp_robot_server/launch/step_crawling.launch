@@ -1,0 +1,6 @@
+<launch>
+  <rosparam file="$(find hybrid_servoing)/experiments/step_crawling/config/hardware.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/step_crawling/config/controller.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/step_crawling/config/task.yaml" command="load"/>
+  <node pkg="hybrid_servoing" name="step_crawling_node" type="StepCrawlingServerNode"  output="screen" ns="robot_bridge"/>
+</launch>

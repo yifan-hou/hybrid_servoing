@@ -29,22 +29,4 @@ add_library(SOLVE_HFVC algorithm/c++/solvehfvc.cpp algorithm/c++/eiquadprog.hpp)
 add_library(RobotBridge experiments/robot_bridge.cpp)
 
 add_subdirectory(experiments/levering_up/cpp_robot_server)
-# add_executable(PlaneEngaging tasks/plane_engaging/plane_engaging.cpp)
-# target_link_libraries(PlaneEngaging
-#   RobotBridge
-#   SOLVE_HFVC
-#   ${catkin_LIBRARIES}
-#   ${TIMER_LIB}
-#   ${RUT}
-# )
-
-
-# add_executable(BlockTilting tasks/block_tilting/block_tilting.cpp)
-# target_link_libraries(BlockTilting
-#   RobotBridge
-#   SOLVE_HFVC
-#   ${catkin_LIBRARIES}
-#   ${TIMER_LIB}
-#   ${RUT}
-# #   ${CMAKE_SOURCE_DIR}/force_control_bridge_ros/MatlabCodeGen/jac_phi_q_block_tilting/jac_phi_q_block_tilting.a
-# )
+add_subdirectory(experiments/step_crawling/cpp_robot_server)

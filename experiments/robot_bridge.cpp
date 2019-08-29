@@ -122,13 +122,9 @@ bool RobotBridge::SrvReset(std_srvs::Empty::Request  &req,
 
   cout << "Moving to reset location.." << endl;
   ros::Rate pub_rate(_main_loop_rate);
-  Timer timer;
-  timer.tic();
   for (int i = 0; i < num_of_steps; ++i) {
     _robot.setPose(pose_traj.col(i).data());
     pub_rate.sleep();
-    cout << "Time: " << timer.toc() << endl;
-    timer.tic();
   }
 
   cout << "[robot_bridge] Reset is done." << endl;
@@ -180,13 +176,9 @@ bool RobotBridge::SrvMoveTool(std_srvs::Empty::Request  &req,
   // int num_of_steps = pose_traj.cols();
 
   ros::Rate pub_rate(_main_loop_rate);
-  Timer timer;
-  timer.tic();
   for (int i = 0; i < num_of_steps; ++i) {
     _robot.setPose(pose_traj.col(i).data());
     pub_rate.sleep();
-    cout << "Time: " << timer.toc() << endl;
-    timer.tic();
   }
   cout << "[robot_bridge] MoveTool finished. " << endl;
 
@@ -246,13 +238,17 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
         wrench[5]*wrench[5]);
     if ((force_mag > _force_touch_threshold) || (torque_mag > 0.4f)) {
       cout << "[MoveUntilTouch] Touched!" << endl;
+      _robot.getPose(pose);
+      _robot.setPose(pose);
+      pub_rate.sleep();
+      _robot.setPose(pose);
       break;
     }
 
     double change_of_force = abs(wrench[0] - wrench_safety_check[0]) +
         abs(wrench[1] - wrench_safety_check[1]) +
         abs(wrench[2] - wrench_safety_check[2]);
-    if (change_of_force < 1e-4) safety_count ++;
+    if (change_of_force < 5e-3) safety_count ++;
     else safety_count = 0;
 
     if (safety_count > 20) {

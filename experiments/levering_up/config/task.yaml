@@ -1,17 +1,19 @@
 task:
-  goal_rotation_angle_deg: 40.0
+  goal_rotation_angle_deg: 80.0
   time_step: 0.1 # sec
-  goal_rotation_velocity: 0.2 # rad/s
+  goal_rotation_velocity: 0.3 # rad/s
   object_mass: 0.15 # kg
   hand_mass: 0 # kg
   object_length: 0.075 # m
-  object_thickness: 0.035 # m
+  object_thickness: 0.0354 # m
   friction_coef:
     table_object: 0.5
     hand_object: 0.7
     bin_object: 0.5
-  min_normal_force_sticking: 5
+  min_normal_force_sticking: 12
   min_normal_force_sliding: -5
   max_normal_force_sliding: 50
-  pre_grasp_pose: [298.5, -386, 16.6, 0.011666, -0.762319, 0.647093, 0.001924]
-  hand_height0: 0.0225 # m, initial hand height from table. Used to estimate table height
+  pre_grasp_pose: [298.5, -388, 12.78, 0.112159, 0.754109, -0.638840, 0.103071]
+  hand_height0: 0.019 # m, initial hand height from table. Used to estimate table height
+  # pre_grasp_pose: [298.5, -388, 2.78, 0.112159, 0.754109, -0.638840, 0.103071]
+  # hand_height0: 0.009 # m, initial hand height from table. Used to estimate table height
