@@ -25,7 +25,7 @@ private:
   double _kNormalForceMin;
   double _kEngageStepLength;
   /**
-   * The data from forcecontrol is scaled. Here we need to know the scale to
+   * The data from force_control is scaled. Here we need to know the scale to
    * recover the original data
    */
   // Eigen::Matrix<double, 6, 6> _force_scale_matrix_inv;

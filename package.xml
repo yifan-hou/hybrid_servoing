@@ -9,11 +9,11 @@
   <license>MIT</license>
 
   <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>forcecontrol</build_depend>
+  <build_depend>force_control</build_depend>
   <build_depend>roscpp</build_depend>
-  <build_export_depend>forcecontrol</build_export_depend>
+  <build_export_depend>force_control</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
-  <exec_depend>forcecontrol</exec_depend>
+  <exec_depend>force_control</exec_depend>
   <exec_depend>roscpp</exec_depend>
 
 

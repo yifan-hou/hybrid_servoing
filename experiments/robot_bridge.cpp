@@ -31,9 +31,9 @@ int RobotBridge::init(ros::NodeHandle *ros_handle, Clock::time_point time0,
   /**
    * Force control parameters
    */
-  ros_handle->param(std::string("/forcecontrol/main_loop_rate"), _main_loop_rate, 500);
-  if (!ros_handle->hasParam("/forcecontrol/main_loop_rate"))
-    ROS_WARN_STREAM("Parameter [/forcecontrol/main_loop_rate] not found");
+  ros_handle->param(std::string("/force_control/main_loop_rate"), _main_loop_rate, 500);
+  if (!ros_handle->hasParam("/force_control/main_loop_rate"))
+    ROS_WARN_STREAM("Parameter [/force_control/main_loop_rate] not found");
 
   /**
    * Robot bridge parameters
@@ -82,7 +82,7 @@ int RobotBridge::init(ros::NodeHandle *ros_handle, Clock::time_point time0,
     ROS_WARN_STREAM("Parameter [/trapezodial/acc_max_rotation] not found");
 
     // --------------------------------------------------------
-    // Initialize robot and forcecontroller
+    // Initialize robot and force controller
     // --------------------------------------------------------
     _robot.init(*ros_handle, time0, ft, robot); // robot must be initialized before controller
     _controller.init(*ros_handle, &_robot, time0);

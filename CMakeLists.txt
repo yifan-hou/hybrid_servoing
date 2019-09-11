@@ -5,7 +5,7 @@ add_compile_options(-std=c++11)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
-  forcecontrol
+  force_control
 )
 
 include_directories(

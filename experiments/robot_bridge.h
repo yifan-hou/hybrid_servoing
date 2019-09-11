@@ -3,8 +3,8 @@
 #include <ros/ros.h>
 #include <std_srvs/Empty.h>
 
-#include <forcecontrol/forcecontrol_hardware.h>
-#include <forcecontrol/forcecontrol_controller.h>
+#include <force_control/force_control_hardware.h>
+#include <force_control/force_control_controller.h>
 
 typedef std::chrono::high_resolution_clock Clock;
 
