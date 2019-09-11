@@ -133,6 +133,7 @@ bool PlaneEngaging::run() {
         f_id.push_back(i);
       }
     }
+
     int f_data_length = f_id.size();
     MatrixXd f_data_filtered = MatrixXd::Zero(6, f_data_length);
     for (int i = 0; i < f_data_length; ++i)
