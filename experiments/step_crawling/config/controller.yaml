@@ -45,10 +45,10 @@ trapezodial:
 ##
 robot_bridge:
   force_touch_threshold: 2
-  pose_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/step_crawling/data/pose_set.txt"
-  velocity_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/step_crawling/data/velocity_set.txt"
-  pose_feedback_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/step_crawling/data/pose_feedback.txt"
-  task_data_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/step_crawling/data/"
+  pose_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/pose_set.txt"
+  velocity_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/velocity_set.txt"
+  pose_feedback_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/pose_feedback.txt"
+  task_data_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/"
   default_pose: # when tool frame is set for probe
     x: 282
     y: -307
