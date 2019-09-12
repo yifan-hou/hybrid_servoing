@@ -26,6 +26,16 @@ bool EngagingTaskServer::initEngagingTaskServer() {
     exit(1);
   }
 
+
+  std::vector<double> scale_force_vector;
+  _ros_handle_p->getParam("/constraint_estimation/scale_force_vector", scale_force_vector);
+  if (!_ros_handle_p->hasParam("/constraint_estimation/scale_force_vector"))
+    ROS_WARN_STREAM("Parameter [/constraint_estimation/scale_force_vector] not found!");
+
+  _force_scale_matrix_inv = Matrix6d::Zero();
+  for (int i = 0; i < 6; ++i) _force_scale_matrix_inv(i,i) = 1.0/scale_force_vector[i];
+
+  double pool_duration = 0;
   _ros_handle_p->param(string("/constraint_estimation/pool_duration"), pool_duration, 0.5);
   if (!_ros_handle_p->hasParam("/constraint_estimation/pool_duration"))
       ROS_WARN_STREAM("Parameter [/constraint_estimation/pool_duration] not found");
@@ -134,7 +144,7 @@ bool EngagingTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     Eigen::JacobiSVD<MatrixXd> svd_f(f_data_filtered.transpose(), Eigen::ComputeThinV);
     VectorXd sigma_f = svd_f.singularValues();
     // check dimensions, estimate natural constraints
-    double threshold = max(f_singular_value_threshold_, 0.1*sigma_f(0));
+    double threshold = std::max(_f_singular_value_threshold, 0.1*sigma_f(0));
     int DimF = 1;
     for (int i = 0; i < 6; ++i)
       if (sigma_f(i) > threshold) DimF ++;
@@ -171,7 +181,7 @@ bool EngagingTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       } // end sampling
     }
     // Get Nf
-    MatrixXd Nf = f_data_selected.transpose() * force_scale_matrix_inv_;
+    MatrixXd Nf = f_data_selected.transpose() * _force_scale_matrix_inv;
 
     // compute goal
     double pose_fb[7], pose_set[7];
@@ -342,7 +352,7 @@ bool EngagingTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     // getchar();
     // cout << "motion begins:" << endl;
     _controller.ExecuteHFVC(action.n_af, action.n_av+3,
-        R_a, pose_set, force_Tr_set.data(),
+        action.R_a, pose_set, force_Tr_set.data(),
         HS_CONTINUOUS, _main_loop_rate, _kTimeStepSec);
 
   } // end for

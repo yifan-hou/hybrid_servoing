@@ -24,6 +24,7 @@ private:
   int _kNumOfTimeSteps;
   double _kGoalVelocityM; // m/s
   double _kNormalForceMin;
+  Eigen::Matrix<double, 6, 6> force_scale_matrix_inv_;
 
   /**
    * The data from force control is scaled. Here we need to know the scale to
