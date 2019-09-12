@@ -1,0 +1,70 @@
+##
+## Force control
+##
+force_control:
+  main_loop_rate: 250
+  # Admittance control parameters for the pseudo spring-mass-damper system
+  # Be careful with Trade-off between length and angle
+  # Assume length is 0.1, then:
+  #   stiffness for rotation should be multiplied with 0.1, so as to feel the same
+  #   Inertia entries for rotation should be multiplied with 0.01
+  #   Damping coefficient for rotation should be multiplied with 0.1
+  # The following parameters are the diagonal elements of the 6x6 matrices
+  #   Stiffness matrix as viewed in tool frame
+  Stiffness_matrix_diag_elements: [0.2, 0.2, 0.2, 0.5, 0.5, 0.5]
+  #   Inertia matrix as viewed in tool frame
+  Inertia_matrix_diag_elements: [0.1, 0.1, 0.1, 0.001, 0.001, 0.001]
+  #   Damping coefficient matrix as viewed in tool frame
+  Damping_matrix_diag_elements: [5, 5, 5, 0.1, 0.1, 0.1]
+  # Damping_matrix_diag_elements: [0.5, 0.5, 0.5, 0.01, 0.01, 0.01]
+  # Force control PID Gains
+  # one set for translation, another set for rotation
+  FC_gains:
+    IGainT: 0.005 # 0.02
+    PGainT: -0.8 #0.5
+    DGainT: 0.00 #0.00
+    IGainR: 0.005 # 0.02
+    PGainR: -0.8 #0.5
+    DGainR: 0.00 #0.00
+  FC_I_Limit_T_6D: [50, 50, 50, 0.5, 0.5, 0.5] # Newton, N*m
+  print_flag: true
+  file_path: "/home/yifan/catkin_mlab_ws/src/force_control/test/data/force_control_data.txt"
+
+##
+## Trapezodial motion planning
+##
+trapezodial:
+  vel_max_translation: 150 # mm/s
+  acc_max_translation: 500 # mm/s^2
+  vel_max_rotation: 1 # rad/s
+  acc_max_rotation: 5 # rad/s^2
+
+
+##
+## Robot bridge
+##
+robot_bridge:
+  force_touch_threshold: 2
+  pose_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/pose_set.txt"
+  velocity_set_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/velocity_set.txt"
+  pose_feedback_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/pose_feedback.txt"
+  task_data_file_path: "/home/yifan/catkin_mlab_ws/src/hybrid_servoing/experiments/engaging/data/"
+  default_pose: # when tool frame is set for probe
+    x: 282
+    y: -307
+    z: 122
+    qw: 0.021556
+    qx: -0.748087
+    qy: 0.662858
+    qz: 0.022837
+
+##
+## Experimental
+##
+constraint_estimation:
+  pool_duration: 0.2 #s
+  scale_force_vector: [1, 1, 1, 10, 10, 10] # Newton, N*m
+  scale_vel_vector: [1, 1, 1, 0.5, 0.5, 0.5] # m/s, rad/s
+  var_force: 1.5 # variance of force magnitude after scaling
+  var_velocity: 0.005 # variance of velocity magnitude after scaling
+
