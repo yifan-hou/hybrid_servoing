@@ -22,7 +22,7 @@ function varargout = interface(varargin)
 
 % Edit the above text to modify the response to help interface
 
-% Last Modified by GUIDE v2.5 28-Aug-2019 16:13:23
+% Last Modified by GUIDE v2.5 13-Sep-2019 11:41:38
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -78,23 +78,23 @@ function BTN_EXP_Init_ROS_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 global reset_client read_obj_pose_client get_robot_pose_client move_tool_client
-global execute_task_client move_until_touch_client
+global execute_task_client engage_client
 global config
 % rosinit;
 
-config = yaml.ReadYaml('../config/task.yaml');
+config = yaml.ReadYaml('../config/abb/task.yaml');
 
 reset_client            = rossvcclient('/robot_bridge/reset');
 get_robot_pose_client   = rossvcclient('/robot_bridge/get_pose');
 move_tool_client        = rossvcclient('/robot_bridge/move_tool');
-move_until_touch_client = rossvcclient('/robot_bridge/move_until_touch');
-execute_task_client      = rossvcclient('/robot_bridge/execute_task');
+engage_client           = rossvcclient('/robot_bridge/compliant_engage');
+execute_task_client     = rossvcclient('/robot_bridge/execute_task');
 
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
 set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
-set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
+set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
 
 disp('Initialization is done. Service clients are ready to use.');
@@ -112,8 +112,8 @@ disp('Reset is done.');
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'off');
 set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'on');
-set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
+set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
 
 % --- Executes on button press in BTN_EXP_Pre_Grasp.
@@ -135,34 +135,11 @@ call(move_tool_client);
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
 set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
+set(handles.BTN_EXP_Planning, 'Enable', 'on');
 set(handles.BTN_EXP_Engage, 'Enable', 'on');
-set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
 
 disp('Pre Grasp is done.');
-
-% --- Executes on button press in BTN_EXP_Engage.
-function BTN_EXP_Engage_Callback(hObject, eventdata, handles)
-% hObject    handle to BTN_EXP_Engage (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-global move_until_touch_client get_robot_pose_client
-
-velocity_set = 10*[0 -1 0]'; % mm/s
-fp = fopen('../data/velocity_set.txt','w');
-fprintf(fp, '%f ', velocity_set);
-fclose(fp);
-disp('Calling move_until_touch_service:');
-call(move_until_touch_client);
-
-set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
-set(handles.BTN_EXP_Reset, 'Enable', 'on');
-set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
-set(handles.BTN_EXP_Engage, 'Enable', 'on');
-set(handles.BTN_EXP_Planning, 'Enable', 'on');
-set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
-
-disp('Engaging is done.');
 
 % --- Executes on button press in BTN_EXP_Planning.
 function BTN_EXP_Planning_Callback(hObject, eventdata, handles)
@@ -170,15 +147,23 @@ function BTN_EXP_Planning_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 clc;
-global get_robot_pose_client execute_task_client move_tool_client inputs
+global execute_task_client
 
-disp('[Planning] Planning begin.');
+disp('[Execution] Execution begin.');
+
+fp = fopen('../data/n.txt','w');
+n = str2double(get(handles.ET_n, 'String')) ;
+disp('n: ');
+disp(n);
+fprintf(fp, '%d ', n);
+fclose(fp);
+
 disp('Calling move_hybrid_service:');
 call(execute_task_client);
+disp('move_hybrid_service is done:');
 
-%%
 %% Drawing
-%%
+
 % visualization
 f_queue = dlmread('../data/f_queue.txt');
 v_queue = dlmread('../data/v_queue.txt');
@@ -208,9 +193,9 @@ if get(handles.CB_PE_show_figures,'value')
     figure(1);clf(1); hold on;
     axis equal
     % v_queue
-    n = size(v_queue, 1);
-    quiver3(zeros(n, 1), zeros(n, 1), zeros(n, 1), ...
-        v_queue(:, 1), v_queue(:, 2), v_queue(:, 3), 'g');
+%     n = size(v_queue, 1);
+%     quiver3(zeros(n, 1), zeros(n, 1), zeros(n, 1), ...
+%         v_queue(:, 1), v_queue(:, 2), v_queue(:, 3), 'g');
     % f_queue
     n = size(f_queue, 1);
     quiver3(zeros(n, 1), zeros(n, 1), zeros(n, 1), ...
@@ -276,7 +261,7 @@ fclose(fp_feedback);
 
 % move up to release
 pose_set = pose_feedback;
-pose_set(2) = pose_set(2) + 30;
+pose_set(1) = pose_set(1) + 30;
 pose_set(3) = pose_set(3) + 30;
 fp = fopen('../data/pose_set.txt','w');
 fprintf(fp, '%f ', pose_set);
@@ -291,7 +276,6 @@ call(reset_client);
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
 set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
-set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
 disp('Release_reset is done.');
@@ -304,3 +288,42 @@ function CB_PE_show_figures_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of CB_PE_show_figures
+
+
+% --- Executes on button press in btn_exp_engage.
+function BTN_EXP_Engage_Callback(hObject, eventdata, handles)
+% hObject    handle to btn_exp_engage (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+clc;
+global engage_client
+
+disp('[Compliant Engage] Compliant Engage begin.');
+disp('Calling engage_service:');
+call(engage_client);
+disp('engage_service is done:');
+
+set(handles.BTN_EXP_Release_Reset, 'Enable', 'on');
+
+
+
+function ET_n_Callback(hObject, eventdata, handles)
+% hObject    handle to ET_n (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of ET_n as text
+%        str2double(get(hObject,'String')) returns contents of ET_n as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function ET_n_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to ET_n (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end

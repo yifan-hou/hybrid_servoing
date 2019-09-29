@@ -11,6 +11,8 @@ public:
   bool hostServices();
 
   // service callback
+  bool SrvCompliantEngage(std_srvs::Empty::Request  &req,
+    std_srvs::Empty::Response &res);
   bool SrvExecuteTask(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res);
 
@@ -21,10 +23,13 @@ private:
   // parameters
   int _pool_size;
   double _kTimeStepSec;
-  int _kNumOfTimeSteps;
   double _kGoalVelocityM; // m/s
-  double _kNormalForceMin;
+  double _kNormalForceMax;
+  double _kEngagingForce;
   Eigen::Matrix<double, 6, 6> force_scale_matrix_inv_;
+  Eigen::Vector3d _goal_W1;
+  Eigen::Vector3d _goal_W2;
+  std::string _timesteps_file_path;
 
   /**
    * The data from force control is scaled. Here we need to know the scale to

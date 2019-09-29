@@ -1,0 +1,15 @@
+task:
+  time_step: 0.02
+  goal_veloicty_meter: 0.02
+  max_normal_force: 0
+  engaging_force: 3
+  v_singular_value_threshold: 0.5
+  f_singular_value_threshold: 0.1
+  # goal_direction_W: [0, 0, -1]
+  # pre_grasp_pose: [0, 345, 370, 0.00929, -0.98765, 0.10302, 0.11767]
+  goal_direction_W1: [-0.1, 0, -0.6]
+  goal_direction_W2: [-0.6, 0, -0.1]
+  pre_grasp_pose: [105, 345, 330, 0.00929, -0.98765, 0.10302, 0.11767]
+  # pre_grasp_pose: [105, 345, 315, 0.07194, 0.98011, -0.15343, -0.10329]
+
+  num_timesteps_file_path: "/usr0/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/engaging/data/n.txt"

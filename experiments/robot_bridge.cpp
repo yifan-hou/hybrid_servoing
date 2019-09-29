@@ -304,21 +304,3 @@ bool RobotBridge::SrvGetPose(std_srvs::Empty::Request  &req,
   _mtx.unlock();
   return true;
 }
-
-// bool SrvHybridServo(std_srvs::Empty::Request  &req,
-//     std_srvs::Empty::Response &res) {
-//   _mtx.lock();
-//   ROS_INFO("[robot_bridge] Calling SrvHybridServo!\n");
-
-//   PlaneEngaging task(&robot, &controller);
-//   // LeveringUp task(&robot, &controller);
-//   ROS_INFO("Reading pose from the file..\n");
-
-//   task.initialize(_task_data_file_path, main_loop_rate, *ros_handle_p);
-//   task.run();
-
-//   cout << "[robot_bridge] SrvHybridServo finished. " << endl;
-
-//   _mtx.unlock();
-//   return true;
-// }
