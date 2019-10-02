@@ -228,12 +228,13 @@ bool EngagingTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       f_data_filtered.col(i) = f_data.col(f_id[i]);
 
     int DimF;
-    MatrixXd Nf;
+    MatrixXd Nf, Nf_null;
     MatrixXd f_data_selected;
 
     if (f_data_length < 6) {
       DimF = 0;
       Nf = MatrixXd(0, 6);
+      Nf_null = MatrixXd::Identity(6, 6);
       f_data_selected = MatrixXd(6, 0);
     } else {
       // SVD on filtered force data, get the prime direction
@@ -279,6 +280,8 @@ bool EngagingTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       }
       // Get Nf
       Nf = f_data_selected.transpose() * _force_scale_matrix_inv;
+      Eigen::JacobiSVD<MatrixXd> svd_Nf(Nf, Eigen::ComputeFullV);
+      Nf_null = matrixV().leftCols(6 - DimF);
     }
 
     // compute goal
@@ -291,8 +294,18 @@ bool EngagingTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       goal_T = R_WT.transpose() * _goal_W1;
     else
       goal_T = R_WT.transpose() * _goal_W2;
-    MatrixXd G = MatrixXd::Zero(1, 6);
-    G.block<1, 3>(0, 0) = goal_T.transpose();
+    MatrixXd G0 = MatrixXd::Zero(1, 6);
+    G0.block<1, 3>(0, 0) = goal_T.transpose();
+    /**
+     * Project Goal to the Null space of Nf
+     */
+    MatrixXd G = G0*Nf_null;
+    double G_norm = G.norm();
+    if (G_norm < 1e-5) {
+      cerr << "[Engaging] Nf is conflicting with G." << endl;
+      getchar();
+    }
+    G = G/G_norm;
     VectorXd b_G = VectorXd::Zero(1);
     b_G(0) = _kGoalVelocityM;
 
