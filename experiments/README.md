@@ -1,3 +1,5 @@
+(This folder is still under development)
+
 Run robot experiments.
 
 Each example problem involves the following parts:
@@ -7,9 +9,14 @@ Each example problem involves the following parts:
 
 # Dependency
 
-# How to use
-1. If the example has an entry under the `example/` folder, it means we use matlab symbolic derivation to compute its jacobian. To use the jacobian function in c++, we need to use Matlab Coder to compile it into a c++ library.
 
-double precision
-use `example_name_control.m` to auto detect input types.
-If you have ` fatal error: tmwtypes.h: No such file or directory`, copy `matlabroot\extern\include\tmwtypes.h` to your project folder.
+# How to use
+## 1. Generate Jacobian using Matlab Coder
+If the example has an entry under the `example/` folder, it means we use matlab symbolic derivation to compute its jacobian. To use the jacobian function in c++, we need to use Matlab Coder to compile it into a c++ library.
+
+Use the following settings in Matlab Coder:
+1. Double precision
+2. Use `example_name_control.m` under the corresponding folder under `example/` to auto detect input types.
+3. When you use the generated code in your C++ project, if you have ` fatal error: tmwtypes.h: No such file or directory`, copy `matlabroot\extern\include\tmwtypes.h` to your project folder.
+
+## 2. 

@@ -71,7 +71,7 @@ end
 p_OHC = p_WH0 - p_WO0;
 
 % object pose
-R_WO = quat2m(q_WO);
+R_WO = quat2SO3(q_WO);
 E_qO = 0.5*[-q_WO(2) -q_WO(3) -q_WO(4);
             q_WO(1) -q_WO(4) q_WO(3);
             q_WO(4) q_WO(1) -q_WO(2);
