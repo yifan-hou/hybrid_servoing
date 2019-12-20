@@ -281,7 +281,7 @@ bool EngagingTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       // Get Nf
       Nf = f_data_selected.transpose() * _force_scale_matrix_inv;
       Eigen::JacobiSVD<MatrixXd> svd_Nf(Nf, Eigen::ComputeFullV);
-      Nf_null = matrixV().leftCols(6 - DimF);
+      Nf_null = svd_Nf.matrixV().leftCols(6 - DimF);
     }
 
     // compute goal
