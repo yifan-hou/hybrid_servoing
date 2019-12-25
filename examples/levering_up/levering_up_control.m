@@ -157,5 +157,5 @@ dims.UnActualized    = kDimUnActualized;
 dims.SlidingFriction = kDimSlidingFriction;
 dims.Lambda          = kDimLambda;
 
-[n_av, n_af, R_a, w_av, eta_af] = solvehfvc(Jacobian_all, ...
-        G, b_G, F, Aeq, beq, A, b_A, dims, 'num_seeds', 3);
+[n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, Jacobian_all, ...
+        G, b_G, F, Aeq, beq, A, b_A, 3);

@@ -126,7 +126,6 @@ dims.UnActualized    = 6;
 dims.SlidingFriction = 0;
 
 tic
-[n_av, n_af, R_a, w_av, eta_af] = solvehfvc(N, ...
-        G, b_G, F, [], [], A, b_A, dims, [], ...
-        [], [], [], 'num_seeds', 3);
+[n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N, ...
+        G, b_G, F, [], [], A, b_A, 3);
 toc

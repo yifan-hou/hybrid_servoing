@@ -1,18 +1,26 @@
-% Solve for hybrid force-velocity control actions
+%% Solve the hybrid servoing problem. The algorithm solves for a hybrid force-velocity control command described by
+% dimensionality @p n_av, @p n_af, direction @p R_a and magnitudes @p w_av, @p eta_af.
 %
-% Input arguments
-%   required:
-%       N_all: Linear constraints on generalized velocity.
-%       G, b_G: Goal description, affine constraints on generalized velocity
-%               G*v = b_G
-%       F: External force vector. Same size as generalized force
-%       Aeq, beq: Guard condition, Aeq*v = beq
-%       A, b_A: Guard condition, A*v <= b_A
-%       dims:
-%           dims.Actualized: number of actualized dimensions
-%           dims.UnActualized: number of unactualized dimensions
-%           dims.SlidingFriction: number of sliding friction dimensions
-%           dims.Lambda: number of reaction forces
+% The constraints are natural holonomic constraints: @p N_all * v = 0, goal constraints @p G*v = @p b_G, static force balance, and contact mode guard conditions.
+%
+% The system has kDOF = dims.Actualized +
+% dims.UnActualized dimensions. This means the generalized force f and
+% generalized velocity v are kDOF dimensional.
+% The first dims.UnActualized dimensions correspond to the free DOFs in the
+% system (such as free objects), while the last dims.Actualized DOFs correspond
+% to the controllable DOFs (such as robot joints.)
+%
+%
+% N_all: Linear constraints on generalized velocity.
+% G, b_G: Goal description, affine constraints on generalized velocity
+%         G*v = b_G
+% F: External force vector. Same size as generalized force
+% Aeq, beq: Guard condition, Aeq*v = beq
+% A, b_A: Guard condition, A*v <= b_A
+% dims:
+%     dims.Actualized: number of actualized dimensions
+%     dims.UnActualized: number of unactualized dimensions
+%     dims.SlidingFriction: number of sliding friction dimensions
 %
 %   optional:
 %       num_seeds: number of random initializations to try when solving for
@@ -21,36 +29,37 @@
 %   n_av: number, dimensionality of velocity controlled actions
 %   n_af: number, dimensionality of force controlled actions
 %   R_a: (n_av+n_af)x(n_av+n_af) matrix, the transformation that describes the
-%           direction of velocity&force control actions
+%           direction of velocity&force control actions. f first, v latter.
 %   w_av: n_av x 1 vector, magnitudes of velocity controls
 %   eta_af: n_af x 1 vector,  magnitudes of force controls
+%
+%   TODO: the use of dims.slidingfriction is weird
 
-
-function [n_av, n_af, R_a, w_av, eta_af, scores] = solvehfvc(N_all, G, b_G, F,...
-        Aeq, beq, A, b_A, dims, sticking_id, ...
-        sliding_id, mu_sticking, mu_sliding, varargin)
+function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N_all, G, ...
+    b_G, F, Aeq, beq, A, b_A, num_seeds)
 
 persistent para
 if isempty(para)
     para = inputParser;
+    validScalar = @(x) isnumeric(x)&&isscalar(x);
     validMatrix = @(x) isnumeric(x);
     validVector = @(x) isempty(x) || (isnumeric(x) && (size(x, 2) == 1));
     validStruct = @(x) isstruct(x);
+    addRequired(para, 'dims', validStruct);
     addRequired(para, 'N_all', validMatrix);
     addRequired(para, 'G', validMatrix);
     addRequired(para, 'b_G', validVector);
-    addRequired(para, 'F', validVector);
-    addRequired(para, 'Aeq', validMatrix);
-    addRequired(para, 'beq', validVector);
-    addRequired(para, 'A', validMatrix);
-    addRequired(para, 'b_A', validVector);
-    addRequired(para, 'dims', validStruct);
-    addParameter(para, 'num_seeds', 1);
+    addOptional(para, 'F', validVector);
+    addOptional(para, 'Aeq', validMatrix);
+    addOptional(para, 'beq', validVector);
+    addOptional(para, 'A', validMatrix);
+    addOptional(para, 'b_A', validVector);
+    addOptional(para, 'num_seeds', 1, validScalar);
 end
 
-parse(para, N_all, G, b_G, F, Aeq, beq, A, b_A, dims, varargin{:});
+parse(para, dims, N_all, G, b_G, F, Aeq, beq, A, b_A, num_seeds);
 
-kNumSeeds = para.Results.num_seeds;
+kNumSeeds = num_seeds;
 
 % constants
 kDimActualized      = dims.Actualized;
@@ -142,6 +151,9 @@ b_NG = [zeros(size(N, 1), 1); b_G];
 v_star = NG\b_NG;
 w_av = C_best*v_star;
 
+if isempty(F)
+    return
+end
 
 disp('============================================================');
 disp('          Begin solving for force commands');
@@ -202,66 +214,73 @@ disp(sum(find(b_Ax < 0)));
 
 return;
 
-disp('============================================================');
-disp('             Evaluate Robustness Criteria                   ');
-disp('============================================================');
 
-% 1. Jamming score
-C = C_best;
-b_C = w_av;
-CRowN = [C; null(N_nullspace_basis')'];
-S = svd(CRowN);
-scores.non_jamming_score = S(end);
 
-kNumOfStickingContacts = length(sticking_id);
-kNumOfSlidingContacts = length(sliding_id);
+% disp('============================================================');
+% disp('             Evaluate Robustness Criteria                   ');
+% disp('============================================================');
+% require additional arguments:
+%   sticking_id
+%   sliding_id
+%   mu_sticking
+%   mu_sliding
 
-scores.sticking_contacts = cell(kNumOfStickingContacts, 1);
-scores.sliding_contacts = cell(kNumOfSlidingContacts, 1);
+% % 1. Jamming score
+% C = C_best;
+% b_C = w_av;
+% CRowN = [C; null(N_nullspace_basis')'];
+% S = svd(CRowN);
+% scores.non_jamming_score = S(end);
 
-for i = 1:kNumOfStickingContacts
-    Ni                          = N_all(sticking_id(i, 1), :);
-    Nbari                       = N_all;
-    Nbari(sticking_id(i, 1), :) = [];
-    Lambda                      = [C; Nbari];
-    scores.sticking_contacts{i}.non_jamming_score = normByRow(Ni*null(Lambda))';
+% kNumOfStickingContacts = length(sticking_id);
+% kNumOfSlidingContacts = length(sliding_id);
 
-    fc = lambda(sticking_id(i, :));
-    fz = fc(end);
-    scores.sticking_contacts{i}.engaging_score = fz;
+% scores.sticking_contacts = cell(kNumOfStickingContacts, 1);
+% scores.sliding_contacts = cell(kNumOfSlidingContacts, 1);
 
-    mu = mu_sticking(i);
-    z = fc*0;
-    z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
-    scores.sticking_contacts{i}.non_slipping_score = ...
-            (mu*z'*fc - norm(cross(z, fc)))*cos(atan(mu));
-end
+% for i = 1:kNumOfStickingContacts
+%     Ni                          = N_all(sticking_id(i, 1), :);
+%     Nbari                       = N_all;
+%     Nbari(sticking_id(i, 1), :) = [];
+%     Lambda                      = [C; Nbari];
+%     scores.sticking_contacts{i}.non_jamming_score = normByRow(Ni*null(Lambda))';
 
-for i = 1:kNumOfSlidingContacts
-    Ni    = N_all(sliding_id(i, :), :);
-    Mi    = Ni;
-    Nbari = N_all;
-    Nbari(sliding_id(i, 1), :) = [];
-    Lambda = [C; Nbari];
-    Lambda_nullspace_basis = null(Lambda);
-    b_Lambda = [b_C; zeros(size(Nbari,1), 1)];
-    scores.sliding_contacts{i}.non_jamming_score = ...
-            normByRow(Ni*Lambda_nullspace_basis)';
+%     fc = lambda(sticking_id(i, :));
+%     fz = fc(end);
+%     scores.sticking_contacts{i}.engaging_score = fz;
 
-    fc = lambda(sliding_id(i, :));
-    fz = fc(end);
-    scores.sliding_contacts{i}.engaging_score = fz;
+%     mu = mu_sticking(i);
+%     z = fc*0;
+%     z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
+%     scores.sticking_contacts{i}.non_slipping_score = ...
+%             (mu*z'*fc - norm(cross(z, fc)))*cos(atan(mu));
+% end
 
-    mu = mu_sliding(i);
-    z = fc*0;
-    z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
-    % compute vL
-    MiNullLambda = Mi*Lambda_nullspace_basis;
-    temp = MiNullLambda*pinv(MiNullLambda);
-    vL = (eye(size(temp,1)) - temp)*Mi*pinv(Lambda)*b_Lambda;
-    scores.sliding_contacts{i}.non_sticking_score = ...
-            cos(atan(mu)) - norm(z'*vL)/norm(vL);
-end
+% for i = 1:kNumOfSlidingContacts
+%     Ni    = N_all(sliding_id(i, :), :);
+%     Mi    = Ni;
+%     Nbari = N_all;
+%     Nbari(sliding_id(i, 1), :) = [];
+%     Lambda = [C; Nbari];
+%     Lambda_nullspace_basis = null(Lambda);
+%     b_Lambda = [b_C; zeros(size(Nbari,1), 1)];
+%     scores.sliding_contacts{i}.non_jamming_score = ...
+%             normByRow(Ni*Lambda_nullspace_basis)';
+
+%     fc = lambda(sliding_id(i, :));
+%     fz = fc(end);
+%     scores.sliding_contacts{i}.engaging_score = fz;
+
+%     mu = mu_sliding(i);
+%     z = fc*0;
+%     z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
+%     % compute vL
+%     MiNullLambda = Mi*Lambda_nullspace_basis;
+%     temp = MiNullLambda*pinv(MiNullLambda);
+%     vL = (eye(size(temp,1)) - temp)*Mi*pinv(Lambda)*b_Lambda;
+%     scores.sliding_contacts{i}.non_sticking_score = ...
+%             cos(atan(mu)) - norm(z'*vL)/norm(vL);
+% end
 
 
 end
