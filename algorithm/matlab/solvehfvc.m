@@ -34,9 +34,10 @@
 %   eta_af: n_af x 1 vector,  magnitudes of force controls
 %
 %   TODO: the use of dims.slidingfriction is weird
+%         handle n_av_min=0 return in c++ code
 
 function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N_all, G, ...
-    b_G, F, Aeq, beq, A, b_A, num_seeds)
+    b_G, F, Aeq, beq, A, b_A, num_seeds, print)
 
 persistent para
 if isempty(para)
@@ -45,6 +46,7 @@ if isempty(para)
     validMatrix = @(x) isnumeric(x);
     validVector = @(x) isempty(x) || (isnumeric(x) && (size(x, 2) == 1));
     validStruct = @(x) isstruct(x);
+    validBool   = @(x) islogical(x);
     addRequired(para, 'dims', validStruct);
     addRequired(para, 'N_all', validMatrix);
     addRequired(para, 'G', validMatrix);
@@ -55,9 +57,10 @@ if isempty(para)
     addOptional(para, 'A', validMatrix);
     addOptional(para, 'b_A', validVector);
     addOptional(para, 'num_seeds', 1, validScalar);
+    addOptional(para, 'print', true, validBool);
 end
 
-parse(para, dims, N_all, G, b_G, F, Aeq, beq, A, b_A, num_seeds);
+parse(para, dims, N_all, G, b_G, F, Aeq, beq, A, b_A, num_seeds, print);
 
 kNumSeeds = num_seeds;
 
@@ -71,10 +74,12 @@ kDimLambda       = size(N, 1);
 kDimContactForce = kDimLambda + kDimSlidingFriction;
 kDimGeneralized  = kDimActualized + kDimUnActualized;
 
-disp('============================================================');
-disp('          Begin solving for velocity commands               ');
-disp('============================================================');
-disp('-------    Determine Possible Dimension of Control   -------');
+if print
+    disp('============================================================');
+    disp('          Begin solving for velocity commands               ');
+    disp('============================================================');
+    disp('-------    Determine Possible Dimension of Control   -------');
+end
 
 NG = [N; G];
 
@@ -82,19 +87,29 @@ rank_N = rank(N);
 rank_NG = rank(NG);
 
 n_av_min = rank_NG - rank_N;
+
 % n_av_max = kDimGeneralized - rank_N;
 n_av = n_av_min;
 n_af = kDimActualized - n_av;
+if n_av_min == 0
+    R_a = [];
+    w_av = [];
+    eta_af = [];
+    return;
+end
+
 % b_NG = [zeros(size(N, 1), 1); b_G];
 NG_nullspace_basis = null(NG);
 basis_c = null([NG_nullspace_basis';
         eye(kDimUnActualized), zeros(kDimUnActualized,kDimActualized)]);
 
-disp(['r_N + n_a: ', num2str(rank_N + kDimActualized)]);
-disp(['n_v: ', num2str(kDimGeneralized)]);
+if print
+    disp(['r_N + n_a: ', num2str(rank_N + kDimActualized)]);
+    disp(['n_v: ', num2str(kDimGeneralized)]);
+    disp('-------  Solve for Directions  -------')
+end
 assert(rank_N + kDimActualized > kDimGeneralized);
 
-disp('-------  Solve for Directions  -------')
 n_c = rank_NG - kDimUnActualized;
 
 % Projected gradient descent
@@ -136,7 +151,9 @@ for seed = 1:kNumSeeds
     end
     cost_all(seed) = costs;
     k_all(:,:,seed) = k;
-    disp(['cost: ' num2str(costs)]);
+    if print
+        disp(['cost: ' num2str(costs)]);
+    end
 end
 
 [~, best_id] = min(cost_all);
@@ -155,9 +172,11 @@ if isempty(F)
     return
 end
 
-disp('============================================================');
-disp('          Begin solving for force commands');
-disp('============================================================');
+if print
+    disp('============================================================');
+    disp('          Begin solving for force commands');
+    disp('============================================================');
+end
 % unactuated dimensions
 H = [eye(kDimUnActualized), zeros(kDimUnActualized, kDimActualized)];
 % Newton's laws
@@ -193,24 +212,26 @@ qp.beq = [zeros(n_free, 1); b_newton];
 options = optimoptions('quadprog', 'Display', 'final-detailed');
 x = quadprog(qp.Q, qp.f, qp.A, qp.b, qp.Aeq, qp.beq, [], [], [],options);
 
-disp('============================================================');
-disp('                  Done.                                     ');
-disp('============================================================');
-
 lambda = x(1:kDimContactForce);
 eta_af = x(n_free + n_dual_free + 1:end);
 
-disp('World frame velocity:');
-disp(R_a^-1*[zeros(n_af, 1); w_av]);
+if print
+    disp('============================================================');
+    disp('                  Done.                                     ');
+    disp('============================================================');
 
-disp('World frame force:');
-disp(R_a^-1*[eta_af; zeros(n_av, 1)]);
+    disp('World frame velocity:');
+    disp(R_a^-1*[zeros(n_af, 1); w_av]);
 
-disp('Equality constraints violation:');
-disp(sum(abs(qp.beq - qp.Aeq*x)));
-disp('Inequality constraints b - Ax > 0 violation:');
-b_Ax = qp.b - qp.A*x;
-disp(sum(find(b_Ax < 0)));
+    disp('World frame force:');
+    disp(R_a^-1*[eta_af; zeros(n_av, 1)]);
+
+    disp('Equality constraints violation:');
+    disp(sum(abs(qp.beq - qp.Aeq*x)));
+    disp('Inequality constraints b - Ax > 0 violation:');
+    b_Ax = qp.b - qp.A*x;
+    disp(sum(find(b_Ax < 0)));
+end
 
 return;
 
