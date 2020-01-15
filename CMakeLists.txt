@@ -29,5 +29,6 @@ add_library(SOLVE_HFVC algorithm/c++/solvehfvc.cpp algorithm/c++/eiquadprog.hpp)
 add_library(RobotBridge experiments/robot_bridge.cpp)
 
 # add_subdirectory(experiments/levering_up/cpp_robot_server)
-add_subdirectory(experiments/step_crawling/cpp_robot_server)
-add_subdirectory(experiments/engaging/cpp_robot_server)
+# add_subdirectory(experiments/step_crawling/cpp_robot_server)
+# add_subdirectory(experiments/engaging/cpp_robot_server)
+add_subdirectory(experiments/diamond/cpp_robot_server)

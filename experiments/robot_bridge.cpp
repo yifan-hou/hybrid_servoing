@@ -53,6 +53,9 @@ int RobotBridge::init(ros::NodeHandle *ros_handle, Clock::time_point time0,
   ros_handle->param(std::string("/robot_bridge/task_data_file_path"), _task_data_file_path, std::string("/tmp"));
   if (!ros_handle->hasParam("/robot_bridge/task_data_file_path"))
     ROS_WARN_STREAM("Parameter [/robot_bridge/task_data_file_path] not found");
+  ros_handle->param(std::string("/robot_bridge/hybrid_action_file_path"), _hybrid_action_file_path, std::string("/tmp"));
+  if (!ros_handle->hasParam("/robot_bridge/hybrid_action_file_path"))
+    ROS_WARN_STREAM("Parameter [/robot_bridge/hybrid_action_file_path] not found");
   if (!ros_handle->hasParam("/robot_bridge/default_pose")) {
     ROS_WARN_STREAM("Parameter [/robot_bridge/default_pose] not found!");
     return -1;
@@ -98,6 +101,7 @@ bool RobotBridge::hostServices() {
   ros::ServiceServer move_tool_service        = _ros_handle_p->advertiseService("move_tool", &RobotBridge::SrvMoveTool, this);
   ros::ServiceServer move_until_touch_service = _ros_handle_p->advertiseService("move_until_touch", &RobotBridge::SrvMoveUntilTouch, this);
   ros::ServiceServer get_pose_service         = _ros_handle_p->advertiseService("get_pose", &RobotBridge::SrvGetPose, this);
+  ros::ServiceServer hybrid_servo_service     = _ros_handle_p->advertiseService("hybrid_servo", &RobotBridge::SrvHybridServo, this);
 
   cout << endl << "[robot_bridge] Initialization is done. Service servers are listening.." << endl;
   ros::spin();
@@ -204,7 +208,7 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
     cerr << "Unable to open file for fp'.";
     exit(1); // terminate with error
   }
-  Eigen::Vector3d v_set;
+  Vector3d v_set;
   cout << "velocity_set: ";
   for (int i = 0; i < 3; ++i) {
     fp >> v_set[i];
@@ -219,7 +223,7 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
 
   double pose[7];
   _robot.getPose(pose);
-  Eigen::Vector3d p_set, v_delta;
+  Vector3d p_set, v_delta;
   p_set << pose[0], pose[1], pose[2];
   v_delta = v_set/double(_main_loop_rate);
   ros::Rate pub_rate(_main_loop_rate);
@@ -300,6 +304,48 @@ bool RobotBridge::SrvGetPose(std_srvs::Empty::Request  &req,
   fp.close();
 
   cout << "[robot_bridge] GetPose finished. " << endl;
+
+  _mtx.unlock();
+  return true;
+}
+
+bool RobotBridge::SrvHybridServo(std_srvs::Empty::Request  &req,
+    std_srvs::Empty::Response &res) {
+  _mtx.lock();
+  ROS_INFO("[robot_bridge] Calling SrvHybridServo!\n");
+
+  /**
+   * Read target pose from file.
+   */
+  ROS_INFO("Reading hybrid action from the file..\n");
+
+  ifstream fp;
+  fp.open(_hybrid_action_file_path);
+
+  if (!fp) {
+    cerr << "Unable to open file for fp'.";
+        exit(1); // terminate with error
+  }
+  int n_af, n_av;
+  double duration_s;
+  double pose_set[7], force_set[6];
+  Matrix6d R_a = Matrix6d::Zero();
+  fp >> n_af >> n_av >> duration_s;
+  for (int i = 0; i < 7; ++i) fp >> pose_set[i];
+  for (int i = 0; i < 6; ++i) fp >> force_set[i];
+  fp >> R_a(0, 0) >> R_a(0, 1) >> R_a(0, 2)
+     >> R_a(1, 0) >> R_a(1, 1) >> R_a(1, 2)
+     >> R_a(2, 0) >> R_a(2, 1) >> R_a(2, 2);
+  fp.close();
+
+  /**
+   * Execute the HFVC
+   */
+
+  _controller.ExecuteHFVC(n_af, n_av, R_a, pose_set, force_set,
+    HS_CONTINUOUS, _main_loop_rate, duration_s);
+
+  cout << "[robot_bridge] HybridServo finished. " << endl;
 
   _mtx.unlock();
   return true;

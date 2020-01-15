@@ -30,7 +30,7 @@ public:
   bool SrvGetPose(std_srvs::Empty::Request  &req,
        std_srvs::Empty::Response &res);
   bool SrvHybridServo(std_srvs::Empty::Request  &req,
-       std_srvs::Empty::Response &res);
+       std_srvs::Empty::Response &res); // to be implemented
 
 
   // parameters from parameter server
@@ -45,6 +45,7 @@ public:
   std::string _velocity_set_file_path;
   std::string _task_data_file_path;
   std::string _pose_feedback_file_path;
+  std::string _hybrid_action_file_path;
 
   // Handles
   ros::NodeHandle *_ros_handle_p = nullptr;
