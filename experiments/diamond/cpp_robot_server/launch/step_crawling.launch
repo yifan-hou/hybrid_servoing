@@ -1,0 +1,6 @@
+<launch>
+  <rosparam file="$(find hybrid_servoing)/experiments/diamond/config/hardware.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/diamond/config/controller.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/diamond/config/task.yaml" command="load"/>
+  <node pkg="hybrid_servoing" name="step_crawling_node" type="StepCrawlingServerNode"  output="screen" ns="robot_bridge"/>
+</launch>

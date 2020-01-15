@@ -1,0 +1,11 @@
+task:
+  pose_BW: [298.5, -430, 45, 0.112159, 0.754109, -0.638840, 0.103071]
+  time_step: 0.1
+  number_of_time_steps: 80
+  goal_veloicty_meter: 0.05
+  engage_step_length: 0.004
+  min_normal_force: 15
+  v_singular_value_threshold: 0.5
+  f_singular_value_threshold: 0.1
+  pre_grasp_pose: [298.5, -430, 45, 0.112159, 0.754109, -0.638840, 0.103071]
+  # pre_grasp_pose: [298.5, -430, 30, 0.021556, -0.748087, 0.662858, 0.022837]
