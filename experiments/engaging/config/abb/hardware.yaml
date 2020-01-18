@@ -34,7 +34,7 @@ ftsensor:
     tx: 1 # maximum: 1
     ty: 1 # maximum: 1
     tz: 1 # maximum: 1
-  transform_sensor_to_tool:
+  transform_sensor_to_tool: # T_ST
     x: 0 # meter
     y: 0
     z: 0.0154

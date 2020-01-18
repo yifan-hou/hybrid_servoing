@@ -4,44 +4,44 @@ robot:
   safety_mode: 1 # 0: none 1: truncate 2: stop
   operation_mode: 0 # 0: cartesian 1: joint
   safe_zone:
-    xmin: 0
-    xmax: 400
-    ymin: -600
-    ymax: -200
-    zmin: 0
-    zmax: 300
+    xmin: -100
+    xmax: 300
+    ymin: 200
+    ymax: 500
+    zmin: 200
+    zmax: 500
 
 ftsensor:
   offset:
-    fx: 0.553902
-    fy: 2.00127
-    fz: -3.65568
-    tx: 0.207023
-    ty: -0.113141
-    tz: -0.00120712
+    fx: 0.364638
+    fy: 2.54961
+    fz: 2.02923
+    tx: -0.201964
+    ty: -0.0266899
+    tz: 0.00107205
   gravity:
-    x: -0.0509948
-    y: 0.219098
-    z: 0.487238
+    x: 0.0172104
+    y: 0.0032356
+    z: -2.34551
   COM:
-    x: 0.000273136
-    y: -0.00062725
-    z: -0.0753672
+    x: -3.84321e-06
+    y: -0.000690115
+    z: 0.0483713
   safety:
-    fx: 40 # maximum: 20
-    fy: 40 # maximum: 20
+    fx: 30 # maximum: 20
+    fy: 30 # maximum: 20
     fz: 60 # maximum: 60
-    tx: 1.5 # maximum: 1
-    ty: 1.5 # maximum: 1
-    tz: 1.5 # maximum: 1
-  transform_sensor_to_tool:
+    tx: 1.2 # maximum: 1
+    ty: 1.2 # maximum: 1
+    tz: 1.2 # maximum: 1
+  transform_sensor_to_tool: # T_ST
     x: 0 # meter
     y: 0
-    z: 0.0927
-    qw: 0.9808
+    z: 0.071
+    qw: 0
     qx: 0
-    qy: 0
-    qz: 0.1951
+    qy: 1
+    qz: 0
 
 ##
 ## Device specific parameters
@@ -62,10 +62,10 @@ netft:
   frame_id: "end_effector"
   publish_rate: 1000
   print_flag: false
-  file_path: "/home/yifan/catkin_ws_mlab/src/force_control/test/data/netft_data.txt"
+  file_path: "/home/yifanh/Git/catkin_ws/src/force_control/test/data/netft_data.txt"
 
 # ABB EGM
 egm:
   portnum: 6510
   print_flag: false
-  file_path: "/home/yifan/catkin_ws_mlab/src/force_control/test/data/egm_data.txt"
+  file_path: "/home/yifanh/Git/catkin_ws/src/force_control/test/data/egm_data.txt"

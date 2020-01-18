@@ -146,7 +146,7 @@ bool RobotBridge::SrvMoveTool(std_srvs::Empty::Request  &req,
    * Read target pose from file.
    * TODO(Yifan): use pose message instead
    */
-  ROS_INFO("Reading pose from the file..\n");
+  ROS_INFO_STREAM("Reading pose from:\n" << _pose_set_file_path << "\n");
 
   ifstream fp;
   fp.open(_pose_set_file_path);
@@ -233,7 +233,7 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
   int safety_count = 0;
   while (true) {
     // check force feedback
-    _robot.getWrench(wrench);
+    int code = _robot.getWrench(wrench);
     cout << "wrench: "<< wrench[0] << ", " << wrench[1] << ", " << wrench[2]
         << endl;
     double force_mag = sqrt(wrench[0]*wrench[0] + wrench[1]*wrench[1] +
@@ -249,13 +249,7 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
       break;
     }
 
-    double change_of_force = abs(wrench[0] - wrench_safety_check[0]) +
-        abs(wrench[1] - wrench_safety_check[1]) +
-        abs(wrench[2] - wrench_safety_check[2]);
-    if (change_of_force < 5e-3) safety_count ++;
-    else safety_count = 0;
-
-    if (safety_count > 20) {
+    if (code == 2) {
       cout << "[MoveUntilTouch] FT sensor stopped!!" << endl;
       break;
     }
@@ -333,17 +327,28 @@ bool RobotBridge::SrvHybridServo(std_srvs::Empty::Request  &req,
   fp >> n_af >> n_av >> duration_s;
   for (int i = 0; i < 7; ++i) fp >> pose_set[i];
   for (int i = 0; i < 6; ++i) fp >> force_set[i];
-  fp >> R_a(0, 0) >> R_a(0, 1) >> R_a(0, 2)
-     >> R_a(1, 0) >> R_a(1, 1) >> R_a(1, 2)
-     >> R_a(2, 0) >> R_a(2, 1) >> R_a(2, 2);
+  for (int i = 0; i < 6; ++i)
+    for (int j = 0; j < 6; ++j)
+      fp >> R_a(i, j);
   fp.close();
+
+  // cout << "The hybrid action:\n";
+  // cout << "n_af: " << n_af << ", n_av: " << n_av << ", duration: " << duration_s << endl;
+  // cout << "pose_set: ";
+  // for (int i = 0; i < 7; ++i) cout << pose_set[i] << " ";
+  // cout << endl << "force_set: ";
+  // for (int i = 0; i < 6; ++i) cout << force_set[i] << " ";
+  // cout << endl << "R_a:" << endl;
+  // cout << R_a.format(MatlabFmt) << endl;
+  // cout << "Press Enter to start.";
+  // getchar();
 
   /**
    * Execute the HFVC
    */
 
   _controller.ExecuteHFVC(n_af, n_av, R_a, pose_set, force_set,
-    HS_CONTINUOUS, _main_loop_rate, duration_s);
+    HS_STOP_AND_GO, _main_loop_rate, duration_s);
 
   cout << "[robot_bridge] HybridServo finished. " << endl;
 

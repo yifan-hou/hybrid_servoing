@@ -11,7 +11,8 @@
 % to the controllable DOFs (such as robot joints.)
 %
 %
-% N_all: Linear constraints on generalized velocity.
+% N_all: Linear constraints on generalized velocity. N_all v = 0
+% N_u: unilateral constraints on generalized velocity.
 % G, b_G: Goal description, affine constraints on generalized velocity
 %         G*v = b_G
 % F: External force vector. Same size as generalized force
@@ -36,7 +37,7 @@
 %   TODO: the use of dims.slidingfriction is weird
 %         handle n_av_min=0 return in c++ code
 
-function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N_all, G, ...
+function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N_all, N_u, G, ...
     b_G, F, Aeq, beq, A, b_A, num_seeds, print)
 
 persistent para
@@ -111,12 +112,20 @@ end
 assert(rank_N + kDimActualized > kDimGeneralized);
 
 n_c = rank_NG - kDimUnActualized;
+b_NG = [zeros(size(N, 1), 1); b_G];
+v_star = NG\b_NG;
 
 % Projected gradient descent
 NIter             = 50;
 N_nullspace_basis = null(N);
 BB                = basis_c'*basis_c;
 NN                = N_nullspace_basis*(N_nullspace_basis');
+
+% added a term:
+%  min kCoefNu*c_i'*v_star*N_u*c_i
+
+VstarN_u = normc(v_star)*sum(normr(N_u));
+kCoefNu = 1;
 
 cost_all = zeros(1, kNumSeeds);
 k_all = rand([n_c, n_av, kNumSeeds]);
@@ -126,7 +135,7 @@ for seed = 1:kNumSeeds
     k  = bsxfun(@rdivide, k, kn);
 
     for iter = 1:NIter
-        % compute gradient
+        % compute gradient0
         g = zeros(n_c, n_av);
         costs = 0;
         for i = 1:n_av
@@ -140,10 +149,13 @@ for seed = 1:kNumSeeds
                 g(:, i) = g(:, i) + 2*(ki'*BB*kj)*BB*kj;
             end
             g(:, i) = g(:, i) - 2*(basis_c')*NN*basis_c*ki;
+            g(:, i) = g(:, i) + kCoefNu*2*(basis_c')*VstarN_u*basis_c*ki;
             costs   = costs - ki'*(basis_c')*NN*basis_c*ki;
+            costs   = costs + kCoefNu*ki'*(basis_c')*VstarN_u*basis_c*ki;
         end
+        disp(['cost: ' num2str(costs)]);
         % descent
-        delta = 10;
+        delta = 0.1;
         k     = k - delta*g;
         % project
         kn = normByCol(basis_c*k);
@@ -151,6 +163,7 @@ for seed = 1:kNumSeeds
     end
     cost_all(seed) = costs;
     k_all(:,:,seed) = k;
+    disp('-------------------');
     if print
         disp(['cost: ' num2str(costs)]);
     end
@@ -164,8 +177,7 @@ R_a = [null(C_best(:, kDimUnActualized+1:end))';
         C_best(:, kDimUnActualized+1:end)];
 T = blkdiag(eye(kDimUnActualized), R_a);
 
-b_NG = [zeros(size(N, 1), 1); b_G];
-v_star = NG\b_NG;
+
 w_av = C_best*v_star;
 
 if isempty(F)
