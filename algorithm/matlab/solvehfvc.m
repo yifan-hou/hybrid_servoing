@@ -125,7 +125,7 @@ NN                = N_nullspace_basis*(N_nullspace_basis');
 %  min kCoefNu*c_i'*v_star*N_u*c_i
 
 VstarN_u = normc(v_star)*sum(normr(N_u));
-kCoefNu = 1;
+kCoefNu = 0;
 
 cost_all = zeros(1, kNumSeeds);
 k_all = rand([n_c, n_av, kNumSeeds]);
@@ -153,7 +153,7 @@ for seed = 1:kNumSeeds
             costs   = costs - ki'*(basis_c')*NN*basis_c*ki;
             costs   = costs + kCoefNu*ki'*(basis_c')*VstarN_u*basis_c*ki;
         end
-        disp(['cost: ' num2str(costs)]);
+        % disp(['cost: ' num2str(costs)]);
         % descent
         delta = 0.1;
         k     = k - delta*g;
@@ -163,7 +163,7 @@ for seed = 1:kNumSeeds
     end
     cost_all(seed) = costs;
     k_all(:,:,seed) = k;
-    disp('-------------------');
+    % disp('-------------------');
     if print
         disp(['cost: ' num2str(costs)]);
     end
