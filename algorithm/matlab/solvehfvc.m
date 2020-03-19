@@ -1,31 +1,56 @@
-% Solve for hybrid force-velocity control actions
-%
-% Input arguments
-%   required:
-%       N_all: Linear constraints on generalized velocity.
-%       G, b_G: Goal description, affine constraints on generalized velocity
-%               G*v = b_G
-%       F: External force vector. Same size as generalized force
-%       Aeq, beq: Guard condition, Aeq*v = beq
-%       A, b_A: Guard condition, A*v <= b_A
-%       dims:
-%           dims.Actualized: number of actualized dimensions
-%           dims.UnActualized: number of unactualized dimensions
-%           dims.SlidingFriction: number of sliding friction dimensions
-%           dims.Lambda: number of reaction forces
-%
-%   optional:
-%       num_seeds: number of random initializations to try when solving for
-%               the velocity control
-% Outputs
-%   n_av: number, dimensionality of velocity controlled actions
-%   n_af: number, dimensionality of force controlled actions
-%   R_a: (n_av+n_af)x(n_av+n_af) matrix, the transformation that describes the
-%           direction of velocity&force control actions
-%   w_av: n_av x 1 vector, magnitudes of velocity controls
-%   eta_af: n_af x 1 vector,  magnitudes of force controls
-
-
+%!
+%! Solve the hybrid servoing problem. Given a system of rigid bodies with known
+%! contacts, find the best hybrid force-velocity control to satisfy the given
+%! velocity goal while avoid crashing & maintaining contact modes.
+%!
+%! Consider a kDOF dimensional system, where kDOF = @p kDimActualized + @p
+%! kDimUnActualized dimensions. The generalized force f and generalized velocity
+%! v are kDOF dimensional.
+%!
+%! The contact force f_c is kConF = @p kDimLambda + @p kDimSlidingFriction
+%! dimensional. The @p kDimLambda dimensional force includes contact normal
+%! forces and friction for sticking contacts. The @p kDimSlidingFriction
+%! dimensional force includes sliding friction force.
+%!
+%! There are kForce = kConF + kDOF dimensional forces (contact forces and
+%! generalized force) in the system.
+%!
+%! @param      N_all        kConF x kDOF Constraint Jacobian Matrix. The first
+%!                          @p kDimLambda rows of @p N_All, denoted as N,
+%!                          describes holonomic constraints: N*v=0
+%! @param      G            Matrix. Goal description. G*v=b_G. Its number of
+%!                          rows determines the number of goal constraints.
+%! @param      b_G          Column vector with the same number of rows as G.
+%! @param      F            kDOF dimensional external force vector. Used in
+%!                          Newton's Second Law.
+%! @param      Aeq          Matrix with kForce columns. Aeq*[f_c; f] = beq is
+%!                          the equality constraint on the force vector.
+%! @param      beq          Column vector with the same number of rows as Aeq.
+%! @param      A            Matrix with kForce columns. A*[f_c; f] <= b_A is the
+%!                          inequality constraint on the force vector.
+%! @param      b_A          Column vector with the same number of rows as A.
+%! @param      dims         A structure with dimension informations.
+%!                          dims.Actualized: Dimensionality of actions.
+%!                          dims.UnActualized: Dimensionality of unactualized
+%!                          DOFs. dims.SlidingFriction: Dimensionality of
+%!                          sliding frictions. dims.Lambda: Dimensionality of
+%!                          holonomic constraints.
+%!
+%! Options:
+%!   num_seeds:  Number of random seeds to use in projected-gradient-descent
+%!               algorithm.
+%!   sticking_id: (used for computing robustness scores) array of Ids of rows
+%!                in N_all that belongs to sticking contacts. Used to compute the
+%!                robustness scores.
+%!   sliding_id:  (used for computing robustness scores) array of Ids of rows
+%!                in N_all that belongs to sliding contacts. Used to compute the
+%!                robustness scores.
+%!   mu_sticking  (used for computing robustness scores) The Coulomb friction
+%!                 coefmu sticking
+%!   mu_sliding   (used for computing robustness scores) The mu sliding
+%!
+%! @return     True if successfully find a solution.
+%!
 function [n_av, n_af, R_a, w_av, eta_af, scores] = solvehfvc(N_all, G, b_G, F,...
         Aeq, beq, A, b_A, dims, sticking_id, ...
         sliding_id, mu_sticking, mu_sliding, varargin)
@@ -200,7 +225,6 @@ disp('Inequality constraints b - Ax > 0 violation:');
 b_Ax = qp.b - qp.A*x;
 disp(sum(find(b_Ax < 0)));
 
-return;
 
 disp('============================================================');
 disp('             Evaluate Robustness Criteria                   ');
@@ -216,52 +240,53 @@ scores.non_jamming_score = S(end);
 kNumOfStickingContacts = length(sticking_id);
 kNumOfSlidingContacts = length(sliding_id);
 
-scores.sticking_contacts = cell(kNumOfStickingContacts, 1);
-scores.sliding_contacts = cell(kNumOfSlidingContacts, 1);
+if (kNumOfSlidingContacts + kNumOfStickingContacts > 0)
+    scores.sticking_contacts = cell(kNumOfStickingContacts, 1);
+    scores.sliding_contacts = cell(kNumOfSlidingContacts, 1);
 
-for i = 1:kNumOfStickingContacts
-    Ni                          = N_all(sticking_id(i, 1), :);
-    Nbari                       = N_all;
-    Nbari(sticking_id(i, 1), :) = [];
-    Lambda                      = [C; Nbari];
-    scores.sticking_contacts{i}.non_jamming_score = normByRow(Ni*null(Lambda))';
+    for i = 1:kNumOfStickingContacts
+        Ni                          = N_all(sticking_id(i, 1), :);
+        Nbari                       = N_all;
+        Nbari(sticking_id(i, 1), :) = [];
+        Lambda                      = [C; Nbari];
+        scores.sticking_contacts{i}.non_jamming_score = normByRow(Ni*null(Lambda))';
 
-    fc = lambda(sticking_id(i, :));
-    fz = fc(end);
-    scores.sticking_contacts{i}.engaging_score = fz;
+        fc = lambda(sticking_id(i, :));
+        fz = fc(end);
+        scores.sticking_contacts{i}.engaging_score = fz;
 
-    mu = mu_sticking(i);
-    z = fc*0;
-    z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
-    scores.sticking_contacts{i}.non_slipping_score = ...
-            (mu*z'*fc - norm(cross(z, fc)))*cos(atan(mu));
+        mu = mu_sticking(i);
+        z = fc*0;
+        z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
+        scores.sticking_contacts{i}.non_slipping_score = ...
+                (mu*z'*fc - norm(cross(z, fc)))*cos(atan(mu));
+    end
+
+    for i = 1:kNumOfSlidingContacts
+        Ni    = N_all(sliding_id(i, :), :);
+        Mi    = Ni;
+        Nbari = N_all;
+        Nbari(sliding_id(i, 1), :) = [];
+        Lambda = [C; Nbari];
+        Lambda_nullspace_basis = null(Lambda);
+        b_Lambda = [b_C; zeros(size(Nbari,1), 1)];
+        scores.sliding_contacts{i}.non_jamming_score = ...
+                normByRow(Ni*Lambda_nullspace_basis)';
+
+        fc = lambda(sliding_id(i, :));
+        fz = fc(end);
+        scores.sliding_contacts{i}.engaging_score = fz;
+
+        mu = mu_sliding(i);
+        z = fc*0;
+        z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
+        % compute vL
+        MiNullLambda = Mi*Lambda_nullspace_basis;
+        temp = MiNullLambda*pinv(MiNullLambda);
+        vL = (eye(size(temp,1)) - temp)*Mi*pinv(Lambda)*b_Lambda;
+        scores.sliding_contacts{i}.non_sticking_score = ...
+                cos(atan(mu)) - norm(z'*vL)/norm(vL);
+    end
 end
-
-for i = 1:kNumOfSlidingContacts
-    Ni    = N_all(sliding_id(i, :), :);
-    Mi    = Ni;
-    Nbari = N_all;
-    Nbari(sliding_id(i, 1), :) = [];
-    Lambda = [C; Nbari];
-    Lambda_nullspace_basis = null(Lambda);
-    b_Lambda = [b_C; zeros(size(Nbari,1), 1)];
-    scores.sliding_contacts{i}.non_jamming_score = ...
-            normByRow(Ni*Lambda_nullspace_basis)';
-
-    fc = lambda(sliding_id(i, :));
-    fz = fc(end);
-    scores.sliding_contacts{i}.engaging_score = fz;
-
-    mu = mu_sliding(i);
-    z = fc*0;
-    z(end) = 1; % [0 1] for 2D, [0 0 1] for 3D
-    % compute vL
-    MiNullLambda = Mi*Lambda_nullspace_basis;
-    temp = MiNullLambda*pinv(MiNullLambda);
-    vL = (eye(size(temp,1)) - temp)*Mi*pinv(Lambda)*b_Lambda;
-    scores.sliding_contacts{i}.non_sticking_score = ...
-            cos(atan(mu)) - norm(z'*vL)/norm(vL);
-end
-
 
 end
