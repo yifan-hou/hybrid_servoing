@@ -12,7 +12,6 @@
 %
 %
 % N_all: Linear constraints on generalized velocity. N_all v = 0
-% N_u: unilateral constraints on generalized velocity.
 % G, b_G: Goal description, affine constraints on generalized velocity
 %         G*v = b_G
 % F: External force vector. Same size as generalized force
@@ -37,7 +36,7 @@
 %   TODO: the use of dims.slidingfriction is weird
 %         handle n_av_min=0 return in c++ code
 
-function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N_all, N_u, G, ...
+function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N_all, G, ...
     b_G, F, Aeq, beq, A, b_A, num_seeds, print)
 
 persistent para
@@ -124,8 +123,8 @@ NN                = N_nullspace_basis*(N_nullspace_basis');
 % added a term:
 %  min kCoefNu*c_i'*v_star*N_u*c_i
 
-VstarN_u = normc(v_star)*sum(normr(N_u));
-kCoefNu = 0;
+% VstarN_u = normc(v_star)*sum(normr(N_u));
+% kCoefNu = 0;
 
 cost_all = zeros(1, kNumSeeds);
 k_all = rand([n_c, n_av, kNumSeeds]);
@@ -149,9 +148,9 @@ for seed = 1:kNumSeeds
                 g(:, i) = g(:, i) + 2*(ki'*BB*kj)*BB*kj;
             end
             g(:, i) = g(:, i) - 2*(basis_c')*NN*basis_c*ki;
-            g(:, i) = g(:, i) + kCoefNu*2*(basis_c')*VstarN_u*basis_c*ki;
+            % g(:, i) = g(:, i) + kCoefNu*2*(basis_c')*VstarN_u*basis_c*ki;
             costs   = costs - ki'*(basis_c')*NN*basis_c*ki;
-            costs   = costs + kCoefNu*ki'*(basis_c')*VstarN_u*basis_c*ki;
+            % costs   = costs + kCoefNu*ki'*(basis_c')*VstarN_u*basis_c*ki;
         end
         % disp(['cost: ' num2str(costs)]);
         % descent
