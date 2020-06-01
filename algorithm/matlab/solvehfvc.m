@@ -108,7 +108,7 @@ if print
     disp(['n_v: ', num2str(kDimGeneralized)]);
     disp('-------  Solve for Directions  -------')
 end
-assert(rank_N + kDimActualized > kDimGeneralized);
+assert(rank_N + kDimActualized >= kDimGeneralized);
 
 n_c = rank_NG - kDimUnActualized;
 b_NG = [zeros(size(N, 1), 1); b_G];
