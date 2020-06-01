@@ -1,6 +1,6 @@
 task:
   pose_BW: [68, 340, 252.84, 0, 0, 0, 1]
-  time_step: 1
-  max_veloicty_meter: 0.02
-  nominal_force: 15
+  time_step: 3 #1.8
+  max_veloicty_meter: 0.02 #0.06
+  nominal_force: 20
   pre_grasp_pose: [68, 340, 308, 0, 0, 0, 1]

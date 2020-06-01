@@ -33,8 +33,11 @@
 %   w_av: n_av x 1 vector, magnitudes of velocity controls
 %   eta_af: n_af x 1 vector,  magnitudes of force controls
 %
-%   (TODO): the use of dims.slidingfriction is weird
+%   TODO: the use of dims.slidingfriction is weird
+%         do rref on N when solving for v_star
+%   TODO in c++:
 %         handle n_av_min=0 return in c++ code
+%         
 
 function [n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, N_all, G, ...
     b_G, F, Aeq, beq, A, b_A, num_seeds, print)
