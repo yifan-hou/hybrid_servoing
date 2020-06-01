@@ -1,4 +1,4 @@
-(This folder is still under development)
+(This folder is still under heavy development)
 
 Run robot experiments.
 
@@ -19,4 +19,3 @@ Use the following settings in Matlab Coder:
 2. Use `example_name_control.m` under the corresponding folder under `example/` to auto detect input types.
 3. When you use the generated code in your C++ project, if you have ` fatal error: tmwtypes.h: No such file or directory`, copy `matlabroot\extern\include\tmwtypes.h` to your project folder.
 
-## 2. 
