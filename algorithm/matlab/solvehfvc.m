@@ -66,7 +66,7 @@ end
 parse(para, dims, N_all, G, b_G, F, Aeq, beq, A, b_A, num_seeds, print);
 
 kNumSeeds = num_seeds;
-
+tic;
 % constants
 kDimActualized      = dims.Actualized;
 kDimUnActualized    = dims.UnActualized;
@@ -182,6 +182,8 @@ T = blkdiag(eye(kDimUnActualized), R_a);
 
 w_av = C_best*v_star;
 
+time_v = toc;
+
 if isempty(F)
     return
 end
@@ -191,6 +193,7 @@ if print
     disp('          Begin solving for force commands');
     disp('============================================================');
 end
+tic;
 % unactuated dimensions
 H = [eye(kDimUnActualized), zeros(kDimUnActualized, kDimActualized)];
 % Newton's laws
@@ -246,6 +249,9 @@ if print
     b_Ax = qp.b - qp.A*x;
     disp(sum(find(b_Ax < 0)));
 end
+time_f = toc;
+
+disp(['time v: ' num2str(time_v*1000) ', time f: ' num2str(time_f*1000)]);
 
 return;
 
@@ -316,6 +322,5 @@ return;
 %     scores.sliding_contacts{i}.non_sticking_score = ...
 %             cos(atan(mu)) - norm(z'*vL)/norm(vL);
 % end
-
 
 end

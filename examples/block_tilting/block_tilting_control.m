@@ -132,25 +132,24 @@ dims.Lambda          = 3*(1+2);
 % Jacobian of Holonomic constraints
 Jac_phi_q = jac_phi_q_block_tilting(p_WO, q_WO, p_WH, p_OHC, p_WTC_all, p_OTC_all);
 tic
-[n_av, n_af, R_a, w_av, eta_af, scores] = solvehfvc(Omega, Jac_phi_q, ...
-        G, b_G, F, [], [], A, b_A, dims, sticking_id, ...
-        sliding_id, sticking_mu, sliding_mu, 'num_seeds', 3);
+[n_av, n_af, R_a, w_av, eta_af] = solvehfvc(dims, Jac_phi_q*Omega, ...
+        G, b_G, F, [], [], A, b_A, 3, false);
 toc
 
 
 % display the scores
-disp(['non_jamming_score: ' num2str(scores.non_jamming_score)]);
-for i = 1:length(scores.sticking_contacts)
-    disp(['sticking contact ' num2str(i) ':']);
-    disp(['     non_jamming_score: ' num2str(scores.sticking_contacts{i}.non_jamming_score)]);
-    disp(['     engaging_score: ' num2str(scores.sticking_contacts{i}.engaging_score)]);
-    disp(['     non_slipping_score: ' num2str(scores.sticking_contacts{i}.non_slipping_score)]);
-end
-for i = 1:length(scores.sliding_contacts)
-    disp(['sliding contact ' num2str(i) ':']);
-    disp(['     non_jamming_score: ' num2str(scores.sliding_contacts{i}.non_jamming_score)]);
-    disp(['     engaging_score: ' num2str(scores.sliding_contacts{i}.engaging_score)]);
-    disp(['     non_sticking_score: ' num2str(scores.sliding_contacts{i}.non_sticking_score)]);
-end
+% disp(['non_jamming_score: ' num2str(scores.non_jamming_score)]);
+% for i = 1:length(scores.sticking_contacts)
+%     disp(['sticking contact ' num2str(i) ':']);
+%     disp(['     non_jamming_score: ' num2str(scores.sticking_contacts{i}.non_jamming_score)]);
+%     disp(['     engaging_score: ' num2str(scores.sticking_contacts{i}.engaging_score)]);
+%     disp(['     non_slipping_score: ' num2str(scores.sticking_contacts{i}.non_slipping_score)]);
+% end
+% for i = 1:length(scores.sliding_contacts)
+%     disp(['sliding contact ' num2str(i) ':']);
+%     disp(['     non_jamming_score: ' num2str(scores.sliding_contacts{i}.non_jamming_score)]);
+%     disp(['     engaging_score: ' num2str(scores.sliding_contacts{i}.engaging_score)]);
+%     disp(['     non_sticking_score: ' num2str(scores.sliding_contacts{i}.non_sticking_score)]);
+% end
 
 
