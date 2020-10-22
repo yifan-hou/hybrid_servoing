@@ -4,6 +4,6 @@ task:
   max_trans_per_frame: 10 # mm, stop the program if a frame is too far away
   plan_offset:
       x: 100  # mm, offset in planar X direction, world Y direction
-      y: 300  # mm, offset in planar Y direction, world Z direction
+      y: 251.4  # mm, offset in planar Y direction, world Z direction (table top height)
   # pre_grasp_pose: [298.5, -388, 12.78, 0.112159, 0.754109, -0.638840, 0.103071]
 

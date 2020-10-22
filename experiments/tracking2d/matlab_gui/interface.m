@@ -231,22 +231,23 @@ num_of_frames = config.num_of_frames;
 ang_max = config.rotation_angle_deg * pi/180;
 H = config.obj_height_mm;
 l = config.hand_offset_mm; % distance from the edge to the hand contact
-
+kFrictionE = config.environment_friction;
+kFrictionH = config.hand_friction;
 for i = 0:num_of_frames
     theta = ang_max*i/num_of_frames;
-    x = -H*sin(theta) + l*cos(theta);
-    y =  H*cos(theta) + l*sin(theta);
+    st = sin(theta);
+    ct = cos(theta);
+    x = -H*st + l*ct;
+    y =  H*ct + l*st;
     
     % solve hfvc
-    p_We = bsxfun(@plus, [kEMinX; kEMinY], diag([kEMaxX - kEMinX, kEMaxY - kEMinY]) * rand(2, ne));
-    p_Hh = bsxfun(@plus, [kHMinX; kHMinY], diag([kHMaxX - kHMinX, kHMaxY - kHMinY]) * rand(2, nh));
-    n_We = normalizeByCol([rand(1, ne) - 0.5; rand(1, ne)]);
-    n_Hh = -normalizeByCol([rand(1, nh) - 0.5; rand(1, nh)]);
-    
-    angle = rand()*90-45; % deg
-    R_WH = rotz(angle);
-    R_WH = R_WH(1:2, 1:2);
-    p_WH = [0; kEMaxY];
+    p_We = [0; 0];
+    n_We = [0; 1];
+    p_Hh = [0; 0];
+    n_Hh = [st; -ct];
+
+    R_WH = eye(2);
+    p_WH = [x; y];
     
     R_HW = R_WH';
     p_HW = -R_HW*p_WH;
@@ -259,8 +260,10 @@ for i = 0:num_of_frames
     [N, Nu, normal_ids] = getJacobianFromContacts(emodes, hmodes, N_e, N_h, T_e, T_h);
     
     % goal
-    G = rand(ng, 6);
-    b_G = rand(ng, 1);
+    G = [0 0 1 0 0 0;
+         0 0 0 0 0 1];
+    b_G = [1; 0];
+    
     % guard condition
     nLambda = size(N,1);
     A = eye(nLambda);

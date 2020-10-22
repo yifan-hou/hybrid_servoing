@@ -1,3 +1,7 @@
+include_directories(
+  ../../
+)
+
 add_library(Tracking2DTaskServer tracking2d.cpp)
 target_link_libraries(Tracking2DTaskServer
   RobotBridge

@@ -14,10 +14,10 @@ using Eigen::Vector2d;
 using Eigen::Matrix2d;
 
 
-bool Tracking2DTaskServer::initBlockTiltingTaskServer() {
-  ROS_INFO_STREAM("BlockTilting server is starting");
+bool Tracking2DTaskServer::initTracking2DTaskServer() {
+  ROS_INFO_STREAM("Tracking2D server is starting");
   if (_ros_handle_p == nullptr) {
-    ROS_ERROR_STREAM("[Tracking2DTaskServer] You must call .init() before .initBlockTiltingTaskServer().");
+    ROS_ERROR_STREAM("[Tracking2DTaskServer] You must call .init() before .initTracking2DTaskServer().");
     exit(1);
   }
 
@@ -80,6 +80,11 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
 
     // get from motion plan
     // HFVC action;
+    int action_n_av;
+    int action_n_af;
+    Matrix3d R_a;
+    VectorXd eta_af, w_av;
+
     Vector2d p_WT_goal;
     p_WT_goal[0] += _kPlanYOffsetX;
     p_WT_goal[1] += _kPlanYOffsetY;
@@ -89,26 +94,26 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
      * The 2D world is the y-z slice of the 3D world
      */
     // dimensions
-    int n_af = action.n_af;
-    int n_av = action.n_av + 4;
+    int n_af = action_n_af;
+    int n_av = action_n_av + 4;
     // Compute Pose command
     // 1. Compute the generalized velocity
-    Matrix3d R_inv = action.R_a.inverse();
+    Matrix3d R_inv = R_a.inverse();
     Vector3d vel_command;
-    vel_command << VectorXd::Zero(action.n_af), action.w_av;
-    Vector3d V3_T = R_inv*vel_command
+    vel_command << VectorXd::Zero(action_n_af), w_av;
+    Vector3d V3_T = R_inv*vel_command;
     // 2. Transform planar velocity to 3D tool frame
     //  This depends on the robot tool frame definition
     //  Here I assume toolZ points upwards, the three planar axes are
     //   [toolY, toolZ, toolRX]
-    Vector6d V6_T = Vector6d::Zero();
+    VectorXd V6_T = VectorXd::Zero(6);
     V6_T(1) = V3_T(0); // toolY = 2D x
     V6_T(2) = V3_T(1); // toolZ = 2D y
     V6_T(3) = V3_T(2); // toolRx = 2D R
     assert(fabs(V6_T(3)) < 1e-7); // it should not rotate
     // 3. Transform to world frame velocity
     Matrix6d Adj_WT = RUT::SE32Adj(SE3_WT_fb);
-    Vector6d V_W = Adj_WT * V6_T;
+    VectorXd V_W = Adj_WT * V6_T;
     assert(fabs(V_W(0)) < 1e-7);
     cout << " World frame velocity: " << V_W.format(MatlabFmt) << endl;
     double pose_set[7];
@@ -139,7 +144,7 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
 
     // Compute force command
     double force_set[6] = {0};
-    for (int i = 0; i < action.n_af; ++i)  force_set[i] = action.eta_af(i);
+    for (int i = 0; i < action_n_af; ++i)  force_set[i] = eta_af(i);
 
     // Compute transformation
     /**
@@ -153,21 +158,21 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
        0  0   0   0   0  1
      */
     Matrix6d T_T = Matrix6d::Zero();
-    T_T.block<3, 3>(0, 1) = action.R_a;
+    T_T.block<3, 3>(0, 1) = R_a;
     T_T(3, 0) = 1;
     T_T(4, 4) = 1;
     T_T(5, 5) = 1;
 
     // print out world frame force for debug
     Vector3d F_command;
-    F_command << action.eta_af, VectorXd::Zero(action.n_av);
+    F_command << eta_af, VectorXd::Zero(action_n_av);
     Vector3d F3_T = R_inv * F_command;
-    Vector6d F6_T;
+    VectorXd F6_T(6);
     F6_T(1) = F3_T(0); // toolY = 2D x
     F6_T(2) = F3_T(1); // toolZ = 2D y
     F6_T(3) = F3_T(2); // toolRx = 2D R
     assert(fabs(F6_T(3)) < 1e-7); // it should not rotate
-    Matrix6d Adj_TW = RUT::SE32Adj(SE3_WT_fb.inv());
+    Matrix6d Adj_TW = RUT::SE32Adj(RUT::SE3Inv(SE3_WT_fb));
     Vector6d F_W = Adj_TW.transpose() * F6_T;
     assert(fabs(F_W(0)) < 1e-7);
     cout << " World frame wrench: " << F_W.format(MatlabFmt) << endl;

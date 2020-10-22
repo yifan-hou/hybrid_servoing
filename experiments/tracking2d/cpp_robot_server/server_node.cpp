@@ -9,8 +9,8 @@ using namespace std;
 using namespace RUT;
 
 int main(int argc, char* argv[]) {
-  ROS_INFO_STREAM("Block tilting task server node starting");
-  ros::init(argc, argv, "block_tilting_node");
+  ROS_INFO_STREAM("Tracking2D task server node starting");
+  ros::init(argc, argv, "tracking2d_node");
   ros::NodeHandle hd;
 
   Clock::time_point time0 = std::chrono::high_resolution_clock::now();
@@ -19,12 +19,14 @@ int main(int argc, char* argv[]) {
   cout << "[test] initializing ft sensor:\n";
   ati.init(hd, time0);
   cout << "[test] initializing robot:\n";
-  URSocket *robot = URSocket::Instance();
+  // URSocket *robot = URSocket::Instance();
+  // robot->init(hd, time0);
+  ABBEGM *robot = ABBEGM::Instance();
   robot->init(hd, time0);
 
-  LeveringUpTaskServer task_server;
+  Tracking2DTaskServer task_server;
   task_server.init(&hd, time0, &ati, robot);
-  task_server.initLeveringUpTaskServer();
+  task_server.initTracking2DTaskServer();
 
   task_server.hostServices();
 
