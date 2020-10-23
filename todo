@@ -11,7 +11,7 @@ todo
     yz -> xz
     compile and test reading trajectory
     test run
-
+    record subl key binding
 
 motion plan tracking
     read motion plan

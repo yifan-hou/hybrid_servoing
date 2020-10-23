@@ -2,8 +2,11 @@ task:
   translation_resolution: 0.1 # mm, threshold for moving on to next frame
   translation_velocity: 5 # mm/s
   max_trans_per_frame: 10 # mm, stop the program if a frame is too far away
-  plan_offset:
-      x: 100  # mm, offset in planar X direction, world Y direction
-      y: 251.4  # mm, offset in planar Y direction, world Z direction (table top height)
+  XZ_plane: true # where to put the plane in 3D space. true: XZ plane. False: YZ plane.
+  plan_offset: # 2D plan + offset = 3D plan
+      x: 100  # mm, offset in world X direction
+      y: 325  # mm, offset in world Y direction
+      z: 251.4  # mm, offset in world Z direction (table top height)
   # pre_grasp_pose: [298.5, -388, 12.78, 0.112159, 0.754109, -0.638840, 0.103071]
-  data_file_name: "~/Git/hybrid_servoing/experiments/tracking2d/data/traj_block_tilting.csv"
+  data_folder_path: "~/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/"
+  data_file_name: "traj_block_tilting.csv"
