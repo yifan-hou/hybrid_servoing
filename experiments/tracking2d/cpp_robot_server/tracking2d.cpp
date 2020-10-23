@@ -51,8 +51,9 @@ bool Tracking2DTaskServer::hostServices() {
   // --------------------------------------------------------
   ros::ServiceServer reset_service            = _ros_handle_p->advertiseService("reset", &Tracking2DTaskServer::SrvReset, (RobotBridge*)this);
   ros::ServiceServer move_tool_service        = _ros_handle_p->advertiseService("move_tool", &Tracking2DTaskServer::SrvMoveTool, (RobotBridge*)this);
-  ros::ServiceServer move_until_touch_service = _ros_handle_p->advertiseService("move_until_touch", &Tracking2DTaskServer::SrvMoveUntilTouch, (RobotBridge*)this);
+  ros::ServiceServer move_until_touch_service = _ros_handle_p->advertiseService("move_until_touch_wrapper", &Tracking2DTaskServer::SrvMoveUntilTouchWrapper, (RobotBridge*)this);
   ros::ServiceServer get_pose_service         = _ros_handle_p->advertiseService("get_pose", &Tracking2DTaskServer::SrvGetPose, (RobotBridge*)this);
+  ros::ServiceServer read_motion_plan_service = _ros_handle_p->advertiseService("read_motion_plan", &Tracking2DTaskServer::SrvReadMotionPlan, this);
   ros::ServiceServer execute_task_service     = _ros_handle_p->advertiseService("execute_task", &Tracking2DTaskServer::SrvExecuteTask, this);
 
   cout << endl << "[Tracking2DTaskServer] Service servers are listening.." << endl;
@@ -62,7 +63,7 @@ bool Tracking2DTaskServer::hostServices() {
   return true;
 }
 
-bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
+bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
   std::cout << "[Tracking2DTaskServer] Reading data from " << _data_filename
       << std::endl;
@@ -89,17 +90,17 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
         for (int i = 0; i < one_traj.size(); ++i) {
           one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
         }
-        motion_plans.push_back(one_traj_eigen);
+        _motion_plans.push_back(one_traj_eigen);
       }
       // start a new trajectory
       one_traj.clear();
       Eigen::Vector2d vec;
       vec(0) = stof(row[1]);
       vec(1) = stof(row[2]);
-      contact_normal_engaging.push_back(vec);
+      _contact_normal_engaging.push_back(vec);
       vec(0) = stof(row[3]);
       vec(1) = stof(row[4]);
-      contact_normal_disengaging.push_back(vec);
+      _contact_normal_disengaging.push_back(vec);
     } else {
       // add new line of data
       VectorXd vec(16);
@@ -113,14 +114,21 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
   for (int i = 0; i < one_traj.size(); ++i) {
     one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
   }
-  motion_plans.push_back(one_traj_eigen);
+  _motion_plans.push_back(one_traj_eigen);
+  _traj_piece_count = 0;
   return true;
 }
 
 bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
+  std::cout << "[Tracking2DTaskServer] Calling ExecuteTask. Running "
+      " piece " << _traj_piece_count << std::endl;
   // get these variables from motion plan
-  int NFrames = 100;
+  if (_traj_piece_count >= _motion_plans.size()) {
+    std::cout << "[Tracking2DTaskServer] The plan is already finished."
+        " Do nothing." << std::endl;
+  }
+  int NFrames = _motion_plans[_traj_piece_count].rows();
 
   // Get current pose
   double pose[7];
@@ -134,20 +142,23 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     _robot.getPose(pose);
     Matrix4d SE3_WT_fb = RUT::posemm2SE3(pose);
 
-    Vector2d p_WH;
-    p_WH(0) = pose[1]*0.001; // m
-    p_WH(1) = pose[2]*0.001;
-
     // get from motion plan
-    // HFVC action;
-    int action_n_av;
-    int action_n_af;
+    Eigen::VectorXd plan = _motion_plans[_traj_piece_count].middleRows(fr, 1).transpose();
+    // [margin, n_af, n_av, R_a (9), eta_af, w_av]
+    int action_n_af = plan(1);
+    int action_n_av = plan(2);
     Matrix3d R_a;
-    VectorXd eta_af, w_av;
+    R_a << plan(3), plan(4), plan(5), plan(6), plan(7), plan(8), plan(9),
+        plan(10), plan(11);
+    VectorXd eta_af(action_n_af), w_av(action_n_av);
+    for (int i = 0; i < action_n_af; ++i)
+      eta_af(i) = plan(12+i);
+    for (int i = 0; i < action_n_av; ++i)
+      w_av(i) = plan(12+action_n_af+i);
 
-    Vector2d p_WT_goal;
-    p_WT_goal[0] += _kPlanYOffsetX;
-    p_WT_goal[1] += _kPlanYOffsetY;
+    Vector2d p_WT_goal; // mm
+    p_WT_goal[0] = plan(15) + _kPlanYOffsetX;
+    p_WT_goal[1] = plan(16) + _kPlanYOffsetY;
 
     /**
      * Convert 2D world action to 3D tool action.
@@ -249,5 +260,14 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       ROS_WARN_STREAM("[Tracking2DTaskServer] unsafe motion. Stopped prematurely.");
     }
   }
+  _traj_piece_count ++; // advance to the next piece
   return true;
 }
+
+bool Tracking2DTaskServer::SrvMoveUntilTouchWrapper(std_srvs::Empty::Request  &req,
+    std_srvs::Empty::Response &res) {
+  // read normal
+
+  SrvMoveUntilTouch(req, res);
+}
+

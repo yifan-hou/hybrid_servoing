@@ -1,0 +1,24 @@
+todo
+    [done] generate file for block tilting
+    [done] parameter for file location
+    [done] rename the whole repo to "tacking2D"
+    [done] ExecuteHFVC with a counter
+    engaging: tracking2d function read, convert, call
+    engaging matlab
+    disengaging: tracking2d function read, convert, call
+    disengaging matlab
+    matlab: 1, 2, 3, 4, 5, all
+    yz -> xz
+    compile and test reading trajectory
+    test run
+
+
+motion plan tracking
+    read motion plan
+    for each piece
+        1. Move to default pose
+        2. Move to the pre-entry pose
+        3. Engage
+        4. start HFVC loop
+        5. Disengage
+

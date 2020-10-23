@@ -22,7 +22,7 @@ function varargout = interface(varargin)
 
 % Edit the above text to modify the response to help interface
 
-% Last Modified by GUIDE v2.5 22-Oct-2020 21:49:19
+% Last Modified by GUIDE v2.5 23-Oct-2020 13:43:14
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -77,8 +77,8 @@ function BTN_EXP_Init_ROS_Callback(hObject, eventdata, handles)
 % hObject    handle to BTN_EXP_Init_ROS (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global reset_client read_obj_pose_client get_robot_pose_client move_tool_client
-global execute_task_client move_until_touch_client
+global reset_client get_robot_pose_client move_tool_client
+global execute_task_client move_until_touch_client read_motion_plan_client
 global config
 % rosinit;
 
@@ -90,6 +90,7 @@ reset_client            = rossvcclient('/robot_bridge/reset');
 get_robot_pose_client   = rossvcclient('/robot_bridge/get_pose');
 move_tool_client        = rossvcclient('/robot_bridge/move_tool');
 move_until_touch_client = rossvcclient('/robot_bridge/move_until_touch');
+read_motion_plan_client = rossvcclient('/robot_bridge/read_motion_plan');
 execute_task_client      = rossvcclient('/robot_bridge/execute_task');
 
 
@@ -99,6 +100,7 @@ set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
 set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
+set(handles.BTN_AllTraj, 'Enable', 'off');
 
 disp('Initialization is done. Service clients are ready to use.');
 
@@ -118,13 +120,14 @@ set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'on');
 set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
+set(handles.BTN_AllTraj, 'Enable', 'on');
 
 % --- Executes on button press in BTN_EXP_Pre_Grasp.
 function BTN_EXP_Pre_Grasp_Callback(hObject, eventdata, handles)
 % hObject    handle to BTN_EXP_Pre_Grasp (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global move_tool_client get_robot_pose_client inputs
+global move_tool_client
 global config
 
 pose_set = cell2mat(config.task.pre_grasp_pose);
@@ -149,7 +152,7 @@ function BTN_EXP_Engage_Callback(hObject, eventdata, handles)
 % hObject    handle to BTN_EXP_Engage (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global move_until_touch_client get_robot_pose_client
+global move_until_touch_client
 
 velocity_set = 10*[0 -1 0]'; % mm/s
 fp = fopen('../data/velocity_set.txt','w');
@@ -311,3 +314,10 @@ end
 
 % write to file
 writematrix(motion_plan, '../data/traj_block_tilting.csv');
+
+
+% --- Executes on button press in BTN_AllTraj.
+function BTN_AllTraj_Callback(hObject, eventdata, handles)
+% hObject    handle to BTN_AllTraj (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
