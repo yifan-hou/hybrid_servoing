@@ -6,4 +6,4 @@ task:
       x: 100  # mm, offset in planar X direction, world Y direction
       y: 251.4  # mm, offset in planar Y direction, world Z direction (table top height)
   # pre_grasp_pose: [298.5, -388, 12.78, 0.112159, 0.754109, -0.638840, 0.103071]
-
+  data_file_name: "~/Git/hybrid_servoing/experiments/tracking2d/data/traj_block_tilting.csv"

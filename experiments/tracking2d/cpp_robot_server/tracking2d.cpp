@@ -37,6 +37,11 @@ bool Tracking2DTaskServer::initTracking2DTaskServer() {
   _ros_handle_p->param(std::string("/task/plan_offset/y"), _kPlanYOffsetY, 0.0);
   if (!_ros_handle_p->hasParam("/task/plan_offset/y"))
     ROS_WARN_STREAM("Parameter [/task/plan_offset/y] not found");
+
+  _ros_handle_p->param(std::string("/task/data_file_name"), _data_filename, "");
+  if (!_ros_handle_p->hasParam("/task/data_file_name"))
+    ROS_WARN_STREAM("Parameter [/task/data_file_name] not found");
+
   return true;
 }
 
@@ -54,6 +59,61 @@ bool Tracking2DTaskServer::hostServices() {
   ros::spin();
 
   ROS_INFO_STREAM(endl << "[Tracking2DTaskServer] Service servers stopped." << endl);
+  return true;
+}
+
+bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
+    std_srvs::Empty::Response &res) {
+  std::cout << "[Tracking2DTaskServer] Reading data from " << _data_filename
+      << std::endl;
+  std::fstream fin;
+  fin.open(_data_filename, std::ios::in);
+
+  std::vector<VectorXd> one_traj;
+  std::vector<string> row;
+  std::string line, word, temp;
+  while (fin >> temp) {
+    row.clear();
+    // Read a row
+    getline(fin, line);
+    stringstream s(line);
+    while (getline(s, word, ', ')) {
+      row.push_back(word);
+    }
+    // check whether to start a new trajectory or not
+    double stability_margin = stof(row[0]);
+    if (stability_margin < 0) {
+      // save the old trajectory
+      if (one_traj.size() > 0) {
+        Eigen::MatrixXd one_traj_eigen(one_traj.size(), one_traj(0).rows());
+        for (int i = 0; i < one_traj.size(); ++i) {
+          one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
+        }
+        motion_plans.push_back(one_traj_eigen);
+      }
+      // start a new trajectory
+      one_traj.clear();
+      Eigen::Vector2d vec;
+      vec(0) = stof(row[1]);
+      vec(1) = stof(row[2]);
+      contact_normal_engaging.push_back(vec);
+      vec(0) = stof(row[3]);
+      vec(1) = stof(row[4]);
+      contact_normal_disengaging.push_back(vec);
+    } else {
+      // add new line of data
+      VectorXd vec(16);
+      for (int i = 0; i < 16; ++i) {
+        vec(i) = stof(row[i+1]);
+      }
+      one_traj.push_back(vec);
+    }
+  } // end while loop
+  Eigen::MatrixXd one_traj_eigen(one_traj.size(), one_traj(0).rows());
+  for (int i = 0; i < one_traj.size(); ++i) {
+    one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
+  }
+  motion_plans.push_back(one_traj_eigen);
   return true;
 }
 

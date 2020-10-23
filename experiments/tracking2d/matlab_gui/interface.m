@@ -22,7 +22,7 @@ function varargout = interface(varargin)
 
 % Edit the above text to modify the response to help interface
 
-% Last Modified by GUIDE v2.5 22-Oct-2020 11:05:08
+% Last Modified by GUIDE v2.5 22-Oct-2020 21:49:19
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -225,21 +225,38 @@ function BTN_Generate_Callback(hObject, eventdata, handles)
 % hObject    handle to BTN_Generate (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global config
 
-num_of_frames = config.num_of_frames;
-ang_max = config.rotation_angle_deg * pi/180;
-H = config.obj_height_mm;
-l = config.hand_offset_mm; % distance from the edge to the hand contact
-kFrictionE = config.environment_friction;
-kFrictionH = config.hand_friction;
-for i = 0:num_of_frames
-    theta = ang_max*i/num_of_frames;
+% global config
+% num_of_frames = config.num_of_frames;
+% ang_max = config.rotation_angle_deg * pi/180;
+% H = config.obj_height_mm;
+% l = config.hand_offset_mm; % distance from the edge to the hand contact
+% kFrictionE = config.environment_friction;
+% kFrictionH = config.hand_friction;
+% kObjWeight = config.object_weight;
+% kMinContactNormalForce = config.contact_normal_force_min;
+
+num_of_frames = 50; % config.num_of_frames;
+ang_max = 50; % config.rotation_angle_deg * pi/180;
+H = 76; % config.obj_height_mm;
+l = 10; % config.hand_offset_mm; % distance from the edge to the hand contact
+kFrictionE = 0.5; % config.environment_friction;
+kFrictionH = 0.9; % config.hand_friction;
+kObjWeight = 5; % config.object_weight;
+kMinContactNormalForce = 8; % config.contact_normal_force_min;
+
+motion_plan = zeros(num_of_frames+2, 17);
+motion_plan(1, 1:5) = [-1 0 1 -1 0];
+
+emodes = 1;
+hmodes = 1;
+for fr = 0:num_of_frames
+    theta = ang_max*fr/num_of_frames;
     st = sin(theta);
     ct = cos(theta);
     x = -H*st + l*ct;
     y =  H*ct + l*st;
-    
+
     % solve hfvc
     p_We = [0; 0];
     n_We = [0; 1];
@@ -248,25 +265,49 @@ for i = 0:num_of_frames
 
     R_WH = eye(2);
     p_WH = [x; y];
-    
+
     R_HW = R_WH';
     p_HW = -R_HW*p_WH;
     adj_HW = SE22Adj(R_HW, p_HW);
     adj_WH = SE22Adj(R_WH, p_WH);
-    
-    [N_e, T_e, N_h, T_h, eCone, eTCone, hCone, hTCone] = getWholeJacobian(p_We, n_We, ...
+
+    [N_e, T_e, N_h, T_h, ~, ~, ~, ~] = getWholeJacobian(p_We, n_We, ...
         p_Hh, n_Hh, adj_WH, adj_HW, 1, kFrictionE, kFrictionH);
-    
-    [N, Nu, normal_ids] = getJacobianFromContacts(emodes, hmodes, N_e, N_h, T_e, T_h);
-    
+
+    [N, ~] = getJacobianFromContacts(emodes, hmodes, N_e, N_h, T_e, T_h);
+
+    J_e = [N_e; T_e];
+    J_h = [N_h; T_h];
+    J_All = [J_e, zeros(2,3) ; -J_h, J_h];
+
     % goal
     G = [0 0 1 0 0 0;
          0 0 0 0 0 1];
     b_G = [1; 0];
-    
-    % guard condition
-    nLambda = size(N,1);
-    A = eye(nLambda);
-    A = -A(normal_ids, :);
-    b_A = -5*ones(size(A,1),1);
 
+    % guard condition
+    A = [-1           0           0  0;
+         0            0          -1  0;
+         -kFrictionE  1           0  0;
+         -kFrictionE -1           0  0;
+         0            0 -kFrictionH  1;
+         0            0 -kFrictionH -1];
+    b = [-kMinContactNormalForce;
+         -kMinContactNormalForce;
+         0;0;0;0];
+    Fg = [0 kObjWeight 0 0 0 0]';
+
+    dims.Actualized = 3;
+    dims.UnActualized = 3;
+    [action, time] = ochs(dims, N, G, b_G, Fg, A, b, J_All);
+    disp(['Frame ' num2str(fr) ' solved in ' num2str(time.velocity*1000+time.force*1000) ' ms.']);
+    % [margin, n_af, n_av, R_a (9), eta_af, w_av]
+    motion_plan(fr+2, :) = [1, action.n_af, action.n_av, ...
+                          action.R_a(1,1), action.R_a(1,2), action.R_a(1,3), ...
+                          action.R_a(2,1), action.R_a(2,2), action.R_a(2,3), ...
+                          action.R_a(3,1), action.R_a(3,2), action.R_a(3,3), ...
+                          action.eta_af', action.w_av', p_WH'];
+end
+
+% write to file
+writematrix(motion_plan, '../data/traj_block_tilting.csv');
