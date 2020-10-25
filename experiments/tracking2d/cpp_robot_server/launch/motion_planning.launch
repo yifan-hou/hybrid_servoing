@@ -1,0 +1,6 @@
+<launch>
+  <rosparam file="$(find hybrid_servoing)/experiments/tracking2d/config/motion_planning/hardware.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/tracking2d/config/motion_planning/controller.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/tracking2d/config/motion_planning/task.yaml" command="load"/>
+  <node pkg="hybrid_servoing" name="tracking2d_node" type="Tracking2DServerNode"  output="screen" ns="robot_bridge"/>
+</launch>

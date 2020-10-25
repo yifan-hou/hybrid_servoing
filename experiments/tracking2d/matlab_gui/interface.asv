@@ -79,10 +79,10 @@ function BTN_EXP_Init_ROS_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 global reset_client get_robot_pose_client move_tool_client disengage_client
 global execute_task_client engage_client read_motion_plan_client pre_engage_client
-% global config
+global config
 % rosinit;
 
-% config = yaml.ReadYaml('../config/task.yaml');
+config = yaml.ReadYaml('../config/task.yaml');
 
 % ROS initializations
 

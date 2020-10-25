@@ -110,7 +110,7 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
       for (int i = 0; i < one_traj.size(); ++i) {
         one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
       }
-      _motion_plans.push_back(one_traj_eigen);
+      _motion_plans_m.push_back(one_traj_eigen);
       Eigen::Vector2d vec;
       vec(0) = std::stof(row[1]);
       vec(1) = std::stof(row[2]);
@@ -137,10 +137,10 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
   _traj_piece_count = 0;
   fin.close();
 
-  std::cout << "_motion_plans: " << _motion_plans.size() << std::endl;
+  std::cout << "_motion_plans_m: " << _motion_plans_m.size() << std::endl;
   std::cout << "_contact_normal_engaging: " << _contact_normal_engaging.size() << std::endl;
   std::cout << "_contact_normal_disengaging: " << _contact_normal_disengaging.size() << std::endl;
-  std::cout << "motion plan 1:\n" << _motion_plans[0] << std::endl;
+  std::cout << "motion plan 1:\n" << _motion_plans_m[0] << std::endl;
   std::cout << "[Tracking2DTaskServer] data is loaded. " << std::endl;
   return true;
 }
@@ -150,12 +150,12 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
   std::cout << "[Tracking2DTaskServer] Calling ExecuteTask. Running "
       " piece " << _traj_piece_count << std::endl;
   // get these variables from motion plan
-  if (_traj_piece_count >= _motion_plans.size()) {
+  if (_traj_piece_count >= _motion_plans_m.size()) {
     std::cout << "[Tracking2DTaskServer] The plan is already finished."
         " Do nothing." << std::endl;
     return false;
   }
-  int NFrames = _motion_plans[_traj_piece_count].rows();
+  int NFrames = _motion_plans_m[_traj_piece_count].rows();
 
   // Get current pose
   double pose[7];
@@ -169,11 +169,11 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     Matrix4d SE3_WT_fb = RUT::posemm2SE3(pose);
 
     // get from motion plan
-    Eigen::VectorXd plan = _motion_plans[_traj_piece_count].middleRows(fr, 1).transpose();
+    Eigen::VectorXd plan = _motion_plans_m[_traj_piece_count].middleRows(fr, 1).transpose();
     // [margin, n_af, n_av, R_a (9), eta_af, w_av]
     int action_n_af = plan(1);
     int action_n_av = plan(2);
-    Matrix3d R_a;
+    Matrix3d R_a; // meter
     R_a << plan(3), plan(4), plan(5), plan(6), plan(7), plan(8), plan(9),
         plan(10), plan(11);
     VectorXd eta_af(action_n_af), w_av(action_n_av);
@@ -185,11 +185,11 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     Vector3d p_WT_goal; // mm
     p_WT_goal << _k2DTo3DOffsetX, _k2DTo3DOffsetY, _k2DTo3DOffsetZ;
     if (_XZ_plane) {
-      p_WT_goal[0] += plan(15);
-      p_WT_goal[2] += plan(16);
+      p_WT_goal[0] += plan(15)*1000.0;
+      p_WT_goal[2] += plan(16)*1000.0;
     } else {
-      p_WT_goal[1] += plan(16);
-      p_WT_goal[2] += plan(16);
+      p_WT_goal[1] += plan(16)*1000.0;
+      p_WT_goal[2] += plan(16)*1000.0;
     }
 
     /**
@@ -203,13 +203,13 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     // 1. Compute the generalized velocity
     Matrix3d R_inv = R_a.inverse();
     Vector3d vel_command;
-    vel_command << VectorXd::Zero(action_n_af), w_av;
-    Vector3d V3_T = R_inv*vel_command;
+    vel_command << VectorXd::Zero(action_n_af), w_av; // meter/s
+    Vector3d V3_T = R_inv*vel_command; // meter/s
     // 2. Transform planar velocity to 3D tool frame
     //  This depends on the robot tool frame definition
     //  Here I assume toolZ points upwards, the three planar axes are
     //   [toolY, toolZ, toolRX]
-    VectorXd V6_T = VectorXd::Zero(6);
+    VectorXd V6_T = VectorXd::Zero(6); // meter/s
     if (_XZ_plane) {
       V6_T(0) = V3_T(0); // toolX = 2D x
       V6_T(2) = V3_T(1); // toolZ = 2D y
@@ -225,8 +225,8 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     // std::cout << "V6_T: " << V6_T.transpose() << std::endl;
     assert(fabs(V6_T(3)) < 1e-7); // it should not rotate
     // 3. Transform to world frame velocity
-    Matrix6d Adj_WT = RUT::SE32Adj(SE3_WT_fb);
-    VectorXd V_W = Adj_WT * V6_T;
+    Matrix6d Adj_WT = RUT::SE32Adj(SE3_WT_fb); // meter/s
+    VectorXd V_W = Adj_WT * V6_T; // unitless
     V_W.normalize();
     cout << " World frame velocity: " << V_W.transpose().format(MatlabFmt) << endl;
     double pose_set[7];
@@ -340,7 +340,7 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
 bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
   std::cout << "[Tracking2DTaskServer] Calling SrvPreEngage. " << std::endl;
-  if (_traj_piece_count >= _motion_plans.size()) {
+  if (_traj_piece_count >= _motion_plans_m.size()) {
     std::cout << "[Tracking2DTaskServer] The plan is already finished, "
         " or it is not loaded." << std::endl;
     return false;
@@ -355,9 +355,10 @@ bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
     v3_W << 0, v2_W(0), v2_W(1);
   }
   // read initial frame
-  Eigen::VectorXd plan = _motion_plans[_traj_piece_count].topRows(1).transpose();
+  Eigen::VectorXd plan = _motion_plans_m[_traj_piece_count].topRows(1).transpose();
   Vector2d p2_W; // mm
   p2_W << plan(15), plan(16);
+  p2_W *= 1000.0;
   p2_W += v2_W*20.0;
   Vector3d p3_W;
   p3_W << _k2DTo3DOffsetX, _k2DTo3DOffsetY, _k2DTo3DOffsetZ;
@@ -394,7 +395,7 @@ bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
 bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
   std::cout << "[Tracking2DTaskServer] Calling SrvEngage. " << std::endl;
-  if (_traj_piece_count >= _motion_plans.size()) {
+  if (_traj_piece_count >= _motion_plans_m.size()) {
     std::cout << "[Tracking2DTaskServer] The plan is already finished, "
         " or it is not loaded." << std::endl;
     return false;

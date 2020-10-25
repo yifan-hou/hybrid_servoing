@@ -47,7 +47,7 @@ private:
   std::string _data_filename;
   bool _XZ_plane;
   // data
-  std::vector<Eigen::MatrixXd> _motion_plans;
+  std::vector<Eigen::MatrixXd> _motion_plans_m;
   std::vector<Eigen::Vector2d> _contact_normal_engaging;
   std::vector<Eigen::Vector2d> _contact_normal_disengaging;
   // internal data
