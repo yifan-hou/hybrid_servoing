@@ -4,8 +4,8 @@ task:
   max_trans_per_frame: 10 # mm, stop the program if a frame is too far away
   XZ_plane: true # where to put the plane in 3D space. true: XZ plane. False: YZ plane.
   plan_offset: # 2D plan + offset = 3D plan
-      x: 100  # mm, offset in world X direction
-      y: 325  # mm, offset in world Y direction
-      z: 253.3  # mm, 251.4 offset in world Z direction (table top height)
+      x: -3  # mm, offset in world X direction
+      y: 353  # mm, offset in world Y direction
+      z: 248.0  # mm, 250 offset in world Z direction (table top height)
   data_folder_path: "/usr0/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/"
   data_file_name: "traj_plastic_cube.csv"

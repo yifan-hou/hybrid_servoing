@@ -41,6 +41,7 @@ public:
   double _kAccMaxTrans;
   double _kVelMaxRot;
   double _kAccMaxRot;
+  bool _test_mode;
   std::string _pose_set_file_path;
   std::string _velocity_set_file_path;
   std::string _task_data_file_path;

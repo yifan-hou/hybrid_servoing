@@ -114,10 +114,10 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
       Eigen::Vector2d vec;
       vec(0) = std::stof(row[1]);
       vec(1) = std::stof(row[2]);
-      _contact_normal_engaging.push_back(vec);
+      _contact_normal_engaging.push_back(-vec);
       vec(0) = std::stof(row[3]);
       vec(1) = std::stof(row[4]);
-      _contact_normal_disengaging.push_back(vec);
+      _contact_normal_disengaging.push_back(-vec);
       // start a new trajectory
       one_traj.clear();
     } else {
@@ -219,10 +219,10 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       V6_T(2) = V3_T(1); // toolZ = 2D y
       V6_T(3) = V3_T(2); // toolRx = 2D R
     }
-    // std::cout << "R_a:\n" << R_a << std::endl;
-    // std::cout << "w_av: " << w_av.transpose() << std::endl;
-    // std::cout << "V3_T: " << V3_T.transpose() << std::endl;
-    // std::cout << "V6_T: " << V6_T.transpose() << std::endl;
+    std::cout << "R_a:\n" << R_a << std::endl;
+    std::cout << "w_av: " << w_av.transpose() << std::endl;
+    std::cout << "V3_T: " << V3_T.transpose() << std::endl;
+    std::cout << "V6_T: " << V6_T.transpose() << std::endl;
     assert(fabs(V6_T(3)) < 1e-7); // it should not rotate
     // 3. Transform to world frame velocity
     Matrix6d Adj_WT = RUT::SE32Adj(SE3_WT_fb); // meter/s
@@ -324,8 +324,12 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
         << pose_set[2] - pose[2] << endl;
     cout << "Duration: " << duration_s << " sec" << std::endl;
     /*  Execute the hybrid action */
-    // cout << "[Tracking2D] Press Enter to move\n";
-    // getchar();
+    if (_test_mode) {
+      cout << "[Tracking2D] Press Enter to move\n";
+      if (getchar() == 'q') {
+        exit(1);
+      }
+    }
     cout << "motion begins:" << endl;
     if (_controller.ExecuteHFVC(n_af, n_av, T_T, pose_set, force_set,
         HS_CONTINUOUS, _main_loop_rate, duration_s)) {

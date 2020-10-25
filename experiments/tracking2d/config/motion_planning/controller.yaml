@@ -48,6 +48,7 @@ robot_bridge:
   velocity_set_file_path: "/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/velocity_set.txt"
   pose_feedback_file_path: "/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/pose_feedback.txt"
   task_data_file_path: "/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/"
+  test_mode: true # test_mode: pause before every motion command
   default_pose: # when tool frame is set for probe
     x: 130
     y: 325

@@ -309,6 +309,10 @@ for fr = 0:num_of_frames
         disp(action.qpflag);
         return;
     end
+    F_command = [action.eta_af; 0; 0];
+    F3_T = (action.R_a)^-1 * F_command;
+    disp(F3_T);
+
     disp(['Frame ' num2str(fr) ' solved in ' num2str(time.velocity*1000+time.force*1000) ' ms.']);
     % [margin, n_af, n_av, R_a (9), eta_af, w_av]
     motion_plan(fr+1, :) = [1, action.n_af, action.n_av, ...
@@ -317,8 +321,8 @@ for fr = 0:num_of_frames
                           action.R_a(3,1), action.R_a(3,2), action.R_a(3,3), ...
                           action.eta_af', action.w_av', p_WH'];
 end
-motion_plan(end, 1:5) = [-1 0 1 -1 0];
+motion_plan(end, 1:5) = [-1 0 -1 1 0];
 
-% write to file
-writematrix(motion_plan, '../data/traj_block_tilting.csv');
-disp('Data is written to file.');
+% % write to file
+% writematrix(motion_plan, '../data/traj_block_tilting.csv');
+% disp('Data is written to file.');

@@ -83,7 +83,9 @@ int RobotBridge::init(ros::NodeHandle *ros_handle, Clock::time_point time0,
     ROS_WARN_STREAM("Parameter [/trapezodial/vel_max_rotation] not found");
   if (!ros_handle->hasParam("/trapezodial/acc_max_rotation"))
     ROS_WARN_STREAM("Parameter [/trapezodial/acc_max_rotation] not found");
-
+  ros_handle->param(std::string("/robot_bridge/test_mode"), _test_mode, true);
+  if (!ros_handle->hasParam("/robot_bridge/test_mode"))
+    ROS_WARN_STREAM("Parameter [/robot_bridge/test_mode] not found");
     // --------------------------------------------------------
     // Initialize robot and force controller
     // --------------------------------------------------------
@@ -124,7 +126,16 @@ bool RobotBridge::SrvReset(std_srvs::Empty::Request  &req,
       &pose_traj);
   int num_of_steps = pose_traj.cols();
 
-  cout << "Moving to reset location.." << endl;
+  cout << "Reset pose: ";
+  for (int i = 0; i < 7; ++i)
+    cout << _default_pose[i] << ", ";
+  cout << endl;
+  if (_test_mode) {
+    cout << "Press Enter to begin motion." << std::endl;
+    if (getchar() == 'q') {
+      exit(1);
+    }
+  }
   ros::Rate pub_rate(_main_loop_rate);
   for (int i = 0; i < num_of_steps; ++i) {
     _robot.setPose(pose_traj.col(i).data());
@@ -179,6 +190,13 @@ bool RobotBridge::SrvMoveTool(std_srvs::Empty::Request  &req,
   //   _kAccMaxRot, _kVelMaxRot, (double)_main_loop_rate, &pose_traj);
   // int num_of_steps = pose_traj.cols();
 
+  if (_test_mode) {
+    cout << "Press Enter to begin motion." << std::endl;
+    if (getchar() == 'q') {
+      exit(1);
+    }
+  }
+
   ros::Rate pub_rate(_main_loop_rate);
   for (int i = 0; i < num_of_steps; ++i) {
     _robot.setPose(pose_traj.col(i).data());
@@ -220,7 +238,12 @@ bool RobotBridge::SrvMoveUntilTouch(std_srvs::Empty::Request  &req,
   /**
    * Beging engaging
    */
-
+  if (_test_mode) {
+    cout << "Press Enter to begin motion." << std::endl;
+    if (getchar() == 'q') {
+      exit(1);
+    }
+  }
   double pose[7];
   _robot.getPose(pose);
   Vector3d p_set, v_delta;
@@ -341,12 +364,19 @@ bool RobotBridge::SrvHybridServo(std_srvs::Empty::Request  &req,
   // cout << endl << "R_a:" << endl;
   // cout << R_a.format(MatlabFmt) << endl;
   // cout << "Press Enter to start.";
-  // getchar();
+  // if (getchar() == 'q') {
+  //   exit(1);
+  // }
 
   /**
    * Execute the HFVC
    */
-
+  if (_test_mode) {
+    cout << "Press Enter to begin motion." << std::endl;
+    if (getchar() == 'q') {
+      exit(1);
+    }
+  }
   _controller.ExecuteHFVC(n_af, n_av, R_a, pose_set, force_set,
     HS_STOP_AND_GO, _main_loop_rate, duration_s);
 
