@@ -104,16 +104,13 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
     // check whether to start a new trajectory or not
     double stability_margin = std::stof(row[0]);
     if (stability_margin < 0) {
-      // save the old trajectory
-      if (one_traj.size() > 0) {
-        Eigen::MatrixXd one_traj_eigen(one_traj.size(), one_traj[0].rows());
-        for (int i = 0; i < one_traj.size(); ++i) {
-          one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
-        }
-        _motion_plans.push_back(one_traj_eigen);
+      // save this trajectory
+      assert(one_traj.size() > 0);
+      Eigen::MatrixXd one_traj_eigen(one_traj.size(), one_traj[0].rows());
+      for (int i = 0; i < one_traj.size(); ++i) {
+        one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
       }
-      // start a new trajectory
-      one_traj.clear();
+      _motion_plans.push_back(one_traj_eigen);
       Eigen::Vector2d vec;
       vec(0) = std::stof(row[1]);
       vec(1) = std::stof(row[2]);
@@ -121,6 +118,8 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
       vec(0) = std::stof(row[3]);
       vec(1) = std::stof(row[4]);
       _contact_normal_disengaging.push_back(vec);
+      // start a new trajectory
+      one_traj.clear();
     } else {
       // add new line of data
       VectorXd vec(17);
@@ -130,11 +129,11 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
       one_traj.push_back(vec);
     }
   } // end while loop
-  Eigen::MatrixXd one_traj_eigen(one_traj.size(), one_traj[0].rows());
-  for (int i = 0; i < one_traj.size(); ++i) {
-    one_traj_eigen.middleRows(i, 1) = one_traj[i].transpose();
+  if (one_traj.size() > 0) {
+    std::cerr << "[Tracking2DTaskServer::SrvReadMotionPlan] Wrong data format! "
+        "The last line must start with -1." << std::endl;
+    exit(-1);
   }
-  _motion_plans.push_back(one_traj_eigen);
   _traj_piece_count = 0;
   fin.close();
 

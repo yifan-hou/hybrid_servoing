@@ -251,7 +251,6 @@ kObjWeight = 1; % config.object_weight;
 kMinContactNormalForce = 8; % config.contact_normal_force_min;
 
 motion_plan = zeros(num_of_frames+2, 17);
-motion_plan(1, 1:5) = [-1 0 1 -1 0];
 
 emodes = 1;
 hmodes = 1;
@@ -312,12 +311,13 @@ for fr = 0:num_of_frames
     end
     disp(['Frame ' num2str(fr) ' solved in ' num2str(time.velocity*1000+time.force*1000) ' ms.']);
     % [margin, n_af, n_av, R_a (9), eta_af, w_av]
-    motion_plan(fr+2, :) = [1, action.n_af, action.n_av, ...
+    motion_plan(fr+1, :) = [1, action.n_af, action.n_av, ...
                           action.R_a(1,1), action.R_a(1,2), action.R_a(1,3), ...
                           action.R_a(2,1), action.R_a(2,2), action.R_a(2,3), ...
                           action.R_a(3,1), action.R_a(3,2), action.R_a(3,3), ...
                           action.eta_af', action.w_av', p_WH'];
 end
+motion_plan(end, 1:5) = [-1 0 1 -1 0];
 
 % write to file
 writematrix(motion_plan, '../data/traj_block_tilting.csv');
