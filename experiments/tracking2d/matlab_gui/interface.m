@@ -22,7 +22,7 @@ function varargout = interface(varargin)
 
 % Edit the above text to modify the response to help interface
 
-% Last Modified by GUIDE v2.5 24-Oct-2020 17:04:00
+% Last Modified by GUIDE v2.5 24-Oct-2020 20:58:00
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -78,7 +78,7 @@ function BTN_EXP_Init_ROS_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 global reset_client get_robot_pose_client move_tool_client disengage_client
-global execute_task_client engage_client read_motion_plan_client
+global execute_task_client engage_client read_motion_plan_client pre_engage_client
 global config
 % rosinit;
 
@@ -89,19 +89,19 @@ config = yaml.ReadYaml('../config/task.yaml');
 get_robot_pose_client   = rossvcclient('/robot_bridge/get_pose');
 reset_client            = rossvcclient('/robot_bridge/reset');
 move_tool_client        = rossvcclient('/robot_bridge/move_tool');
+pre_engage_client       = rossvcclient('/robot_bridge/pre_engage');
 engage_client           = rossvcclient('/robot_bridge/engage');
 disengage_client        = rossvcclient('/robot_bridge/disengage');
 read_motion_plan_client = rossvcclient('/robot_bridge/read_motion_plan');
 execute_task_client     = rossvcclient('/robot_bridge/execute_task');
 
-
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
-set(handles.BTN_reset_for_next, 'Enable', 'on');
+set(handles.BTN_reset_PreEngage, 'Enable', 'on');
 set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
-set(handles.BTN_AllTraj, 'Enable', 'off');
+set(handles.BTN_Release_restart, 'Enable', 'off');
 
 disp('Initialization is done. Service clients are ready to use.');
 
@@ -112,7 +112,6 @@ function BTN_EXP_Reset_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 global reset_client read_motion_plan_client
 
-
 disp('Calling read_motion_plan_client:');
 call(read_motion_plan_client);
 disp('Moton plan is loaded.');
@@ -122,12 +121,7 @@ disp('Calling Reset_service:');
 call(reset_client);
 disp('Reset is done.');
 
-set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Engage, 'Enable', 'on');
-set(handles.BTN_EXP_Planning, 'Enable', 'off');
-set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
-set(handles.BTN_AllTraj, 'Enable', 'on');
-
 disp('Reset is done.');
 
 % --- Executes on button press in BTN_EXP_Engage.
@@ -140,13 +134,8 @@ global engage_client
 disp('Calling engage_service:');
 call(engage_client);
 
-set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
-set(handles.BTN_EXP_Reset, 'Enable', 'on');
 set(handles.BTN_EXP_Engage, 'Enable', 'on');
 set(handles.BTN_EXP_Planning, 'Enable', 'on');
-set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
-set(handles.BTN_AllTraj, 'Enable', 'off');
-
 disp('Engaging is done.');
 
 % --- Executes on button press in BTN_EXP_Planning.
@@ -160,9 +149,10 @@ global execute_task_client
 disp('Calling move_hybrid_service:');
 call(execute_task_client);
 
+set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'on');
-set(handles.BTN_AllTraj, 'Enable', 'off');
+set(handles.BTN_Release_restart, 'Enable', 'on');
 
 disp('Planning is done.')
 
@@ -171,20 +161,69 @@ function BTN_EXP_Release_Reset_Callback(hObject, eventdata, handles)
 % hObject    handle to BTN_EXP_Release_Reset (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global disengage_client
+global disengage_client reset_client pre_engage_client
 
 disp('Calling disengage_service:');
 call(disengage_client);
 
-set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
-set(handles.BTN_EXP_Reset, 'Enable', 'on');
-set(handles.BTN_reset_for_next, 'Enable', 'on');
-set(handles.BTN_EXP_Engage, 'Enable', 'off');
-set(handles.BTN_EXP_Planning, 'Enable', 'off');
-set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
-set(handles.BTN_AllTraj, 'Enable', 'off');
-disp('Release_reset is done.');
+disp('Calling Reset_service:');
+call(reset_client);
+disp('Reset is done.');
 
+disp('Calling Pre_engage_service:');
+call(pre_engage_client);
+disp('Pre Engage is done.');
+
+set(handles.BTN_EXP_Engage, 'Enable', 'on');
+set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
+set(handles.BTN_Release_restart, 'Enable', 'off');
+
+
+% --- Executes on button press in BTN_reset_PreEngage.
+function BTN_reset_PreEngage_Callback(hObject, eventdata, handles)
+% hObject    handle to BTN_reset_PreEngage (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+global reset_client read_motion_plan_client pre_engage_client
+
+disp('Calling Reset_service:');
+call(reset_client);
+disp('Reset is done.');
+
+disp('Calling read_motion_plan_client:');
+call(read_motion_plan_client);
+disp('Moton plan is loaded.');
+
+disp('Calling Pre_Reset_service:');
+call(pre_engage_client);
+disp('Pre-engage is done.');
+
+set(handles.BTN_EXP_Engage, 'Enable', 'on');
+
+% --- Executes on button press in BTN_Release_restart.
+function BTN_Release_restart_Callback(hObject, eventdata, handles)
+% hObject    handle to BTN_Release_restart (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+global disengage_client reset_client pre_engage_client read_motion_plan_client
+
+disp('Calling disengage_service:');
+call(disengage_client);
+
+disp('Calling Reset_service:');
+call(reset_client);
+disp('Reset is done.');
+
+disp('Calling read_motion_plan_client:');
+call(read_motion_plan_client);
+disp('Moton plan is loaded.');
+
+disp('Calling Pre_engage_service:');
+call(pre_engage_client);
+disp('Pre Engage is done.');
+
+set(handles.BTN_EXP_Engage, 'Enable', 'on');
+set(handles.BTN_Release_restart, 'Enable', 'off');
 
 % --- Executes on button press in BTN_Generate.
 function BTN_Generate_Callback(hObject, eventdata, handles)
@@ -283,32 +322,3 @@ end
 % write to file
 writematrix(motion_plan, '../data/traj_block_tilting.csv');
 disp('Data is written to file.');
-
-
-% --- Executes on button press in BTN_AllTraj.
-function BTN_AllTraj_Callback(hObject, eventdata, handles)
-% hObject    handle to BTN_AllTraj (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-
-% --- Executes on button press in BTN_reset_for_next.
-function BTN_reset_for_next_Callback(hObject, eventdata, handles)
-% hObject    handle to BTN_reset_for_next (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-global reset_client
-
-
-disp('Calling Reset_service:');
-call(reset_client);
-disp('Reset is done.');
-
-set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
-set(handles.BTN_reset_for_next, 'Enable', 'off');
-set(handles.BTN_EXP_Engage, 'Enable', 'on');
-set(handles.BTN_EXP_Planning, 'Enable', 'off');
-set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
-set(handles.BTN_AllTraj, 'Enable', 'on');
-
-disp('Next Traj is ready to go.');

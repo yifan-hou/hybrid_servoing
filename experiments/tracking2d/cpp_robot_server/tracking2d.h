@@ -27,6 +27,8 @@ public:
   /**
    * Wrapper for parent SrvMoveUntilTouch. Compute direction from motion plan.
    */
+  bool SrvPreEngage(std_srvs::Empty::Request  &req,
+      std_srvs::Empty::Response &res);
   bool SrvEngage(std_srvs::Empty::Request  &req,
       std_srvs::Empty::Response &res);
   bool SrvDisengage(std_srvs::Empty::Request  &req,

@@ -66,6 +66,7 @@ bool Tracking2DTaskServer::hostServices() {
   ros::ServiceServer reset_service            = _ros_handle_p->advertiseService("reset", &Tracking2DTaskServer::SrvReset, (RobotBridge*)this);
   ros::ServiceServer move_tool_service        = _ros_handle_p->advertiseService("move_tool", &Tracking2DTaskServer::SrvMoveTool, (RobotBridge*)this);
   ros::ServiceServer engage_service           = _ros_handle_p->advertiseService("engage", &Tracking2DTaskServer::SrvEngage, this);
+  ros::ServiceServer preengage_service        = _ros_handle_p->advertiseService("pre_engage", &Tracking2DTaskServer::SrvPreEngage, this);
   ros::ServiceServer disengage_service        = _ros_handle_p->advertiseService("disengage", &Tracking2DTaskServer::SrvDisengage, this);
   ros::ServiceServer get_pose_service         = _ros_handle_p->advertiseService("get_pose", &Tracking2DTaskServer::SrvGetPose, (RobotBridge*)this);
   ros::ServiceServer read_motion_plan_service = _ros_handle_p->advertiseService("read_motion_plan", &Tracking2DTaskServer::SrvReadMotionPlan, this);
@@ -330,15 +331,16 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     if (_controller.ExecuteHFVC(n_af, n_av, T_T, pose_set, force_set,
         HS_CONTINUOUS, _main_loop_rate, duration_s)) {
       ROS_WARN_STREAM("[Tracking2DTaskServer] unsafe motion. Stopped prematurely.");
+      return false;
     }
   }
   std::cout << "[Tracking2DTaskServer] SrvExecuteTask is done. " << std::endl;
   return true;
 }
 
-bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
+bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
-  std::cout << "[Tracking2DTaskServer] Calling SrvEngage. " << std::endl;
+  std::cout << "[Tracking2DTaskServer] Calling SrvPreEngage. " << std::endl;
   if (_traj_piece_count >= _motion_plans.size()) {
     std::cout << "[Tracking2DTaskServer] The plan is already finished, "
         " or it is not loaded." << std::endl;
@@ -368,9 +370,6 @@ bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
     p3_W(2) += p2_W(1);
   }
 
-  /**
-   * Step one: move to prepare pose
-   */
   double pose[7];
   _robot.getPose(pose); // get orientaton
   pose[0] = p3_W(0);
@@ -388,20 +387,35 @@ bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
     fout << pose[i] << " ";
   fout.close();
   // call parent MoveUntilTouch
-  SrvMoveTool(req, res);
+  bool flag = SrvMoveTool(req, res);
+  std::cout << "SrvPreEngage is done." << std::endl;
+  return flag;
+}
 
-  /**
-   * Step two: engage
-   */
+bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
+    std_srvs::Empty::Response &res) {
+  std::cout << "[Tracking2DTaskServer] Calling SrvEngage. " << std::endl;
+  if (_traj_piece_count >= _motion_plans.size()) {
+    std::cout << "[Tracking2DTaskServer] The plan is already finished, "
+        " or it is not loaded." << std::endl;
+    return false;
+  }
+   // read normal
+  Eigen::Vector2d v2_W = _contact_normal_engaging[_traj_piece_count];
+  v2_W.normalize();
+  Eigen::Vector3d v3_W;
+  if (_XZ_plane) {
+    v3_W << v2_W(0), 0, v2_W(1);
+  } else {
+    v3_W << 0, v2_W(0), v2_W(1);
+  }
   v3_W *= -10; // mm/s
   // write to file
+  std::ofstream fout;
   fout.open(_data_folder_path + "velocity_set.txt", std::ios::out | std::ios::trunc);
   fout << v3_W(0) << v3_W(1) << v3_W(2);
   fout.close();
   std::cout << "Engaging direction: " << v3_W.transpose() << std::endl;
-  std::cout << "Press Enter to start" << std::endl;
-  getchar();
-
   // call parent MoveUntilTouch
   bool flag = SrvMoveUntilTouch(req, res);
   std::cout << "[Tracking2DTaskServer] SrvEngage is done. " << std::endl;
