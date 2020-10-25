@@ -3,15 +3,18 @@ todo
     [done] parameter for file location
     [done] rename the whole repo to "tacking2D"
     [done] ExecuteHFVC with a counter
-    engaging: tracking2d function read, convert, call
-    engaging matlab
-    disengaging: tracking2d function read, convert, call
-    disengaging matlab
-    matlab: 1, 2, 3, 4, 5, all
-    yz -> xz
-    compile and test reading trajectory
-    test run
-    record subl key binding
+    [done] engaging: tracking2d function read, convert, call
+    [done] engaging matlab
+    [done] disengaging: tracking2d function read, convert, call
+    [done] disengaging matlab
+    [done] matlab: 1, 2, 3, 4, 5
+    [done] yz -> xz
+    [done] compile and test reading trajectory
+    [done] test run
+    [done] record subl key binding
+    decompose engaging into two part, Engaging itself can run multiple times
+    Handle Xianyi's data format
+    matlab all
 
 motion plan tracking
     read motion plan

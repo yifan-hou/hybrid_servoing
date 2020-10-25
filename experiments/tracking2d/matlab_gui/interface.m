@@ -22,7 +22,7 @@ function varargout = interface(varargin)
 
 % Edit the above text to modify the response to help interface
 
-% Last Modified by GUIDE v2.5 23-Oct-2020 13:43:14
+% Last Modified by GUIDE v2.5 24-Oct-2020 17:04:00
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -86,8 +86,8 @@ config = yaml.ReadYaml('../config/task.yaml');
 
 % ROS initializations
 
-reset_client            = rossvcclient('/robot_bridge/reset');
 get_robot_pose_client   = rossvcclient('/robot_bridge/get_pose');
+reset_client            = rossvcclient('/robot_bridge/reset');
 move_tool_client        = rossvcclient('/robot_bridge/move_tool');
 engage_client           = rossvcclient('/robot_bridge/engage');
 disengage_client        = rossvcclient('/robot_bridge/disengage');
@@ -97,7 +97,7 @@ execute_task_client     = rossvcclient('/robot_bridge/execute_task');
 
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
-set(handles.BTN_EXP_Pre_Grasp, 'Enable', 'off');
+set(handles.BTN_reset_for_next, 'Enable', 'on');
 set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
@@ -110,19 +110,25 @@ function BTN_EXP_Reset_Callback(hObject, eventdata, handles)
 % hObject    handle to BTN_EXP_Reset (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global reset_client
+global reset_client read_motion_plan_client
+
+
+disp('Calling read_motion_plan_client:');
+call(read_motion_plan_client);
+disp('Moton plan is loaded.');
+
+
 disp('Calling Reset_service:');
 call(reset_client);
 disp('Reset is done.');
 
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
-set(handles.BTN_EXP_Reset, 'Enable', 'off');
-set(handles.BTN_EXP_Engage, 'Enable', 'off');
+set(handles.BTN_EXP_Engage, 'Enable', 'on');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
 set(handles.BTN_AllTraj, 'Enable', 'on');
 
-disp('Pre Grasp is done.');
+disp('Reset is done.');
 
 % --- Executes on button press in BTN_EXP_Engage.
 function BTN_EXP_Engage_Callback(hObject, eventdata, handles)
@@ -172,6 +178,7 @@ call(disengage_client);
 
 set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
 set(handles.BTN_EXP_Reset, 'Enable', 'on');
+set(handles.BTN_reset_for_next, 'Enable', 'on');
 set(handles.BTN_EXP_Engage, 'Enable', 'off');
 set(handles.BTN_EXP_Planning, 'Enable', 'off');
 set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
@@ -196,12 +203,12 @@ function BTN_Generate_Callback(hObject, eventdata, handles)
 % kMinContactNormalForce = config.contact_normal_force_min;
 
 num_of_frames = 50; % config.num_of_frames;
-ang_max = 50; % config.rotation_angle_deg * pi/180;
+ang_max = 50 * pi/180; % config.rotation_angle_deg * pi/180;
 H = 76; % config.obj_height_mm;
-l = 10; % config.hand_offset_mm; % distance from the edge to the hand contact
-kFrictionE = 0.5; % config.environment_friction;
+l = 20; % config.hand_offset_mm; % distance from the edge to the hand contact
+kFrictionE = 1.0; % config.environment_friction;
 kFrictionH = 0.9; % config.hand_friction;
-kObjWeight = 5; % config.object_weight;
+kObjWeight = 1; % config.object_weight;
 kMinContactNormalForce = 8; % config.contact_normal_force_min;
 
 motion_plan = zeros(num_of_frames+2, 17);
@@ -259,6 +266,11 @@ for fr = 0:num_of_frames
     dims.Actualized = 3;
     dims.UnActualized = 3;
     [action, time] = ochs(dims, N, G, b_G, Fg, A, b, J_All);
+    if action.qpflag ~= 1
+        disp('Force Infeasible. Flag = ');
+        disp(action.qpflag);
+        return;
+    end
     disp(['Frame ' num2str(fr) ' solved in ' num2str(time.velocity*1000+time.force*1000) ' ms.']);
     % [margin, n_af, n_av, R_a (9), eta_af, w_av]
     motion_plan(fr+2, :) = [1, action.n_af, action.n_av, ...
@@ -278,3 +290,25 @@ function BTN_AllTraj_Callback(hObject, eventdata, handles)
 % hObject    handle to BTN_AllTraj (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in BTN_reset_for_next.
+function BTN_reset_for_next_Callback(hObject, eventdata, handles)
+% hObject    handle to BTN_reset_for_next (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+global reset_client
+
+
+disp('Calling Reset_service:');
+call(reset_client);
+disp('Reset is done.');
+
+set(handles.BTN_EXP_Init_ROS, 'Enable', 'off');
+set(handles.BTN_reset_for_next, 'Enable', 'off');
+set(handles.BTN_EXP_Engage, 'Enable', 'on');
+set(handles.BTN_EXP_Planning, 'Enable', 'off');
+set(handles.BTN_EXP_Release_Reset, 'Enable', 'off');
+set(handles.BTN_AllTraj, 'Enable', 'on');
+
+disp('Next Traj is ready to go.');

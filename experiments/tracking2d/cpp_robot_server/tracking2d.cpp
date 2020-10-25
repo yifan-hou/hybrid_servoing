@@ -52,6 +52,10 @@ bool Tracking2DTaskServer::initTracking2DTaskServer() {
   if (!_ros_handle_p->hasParam("/task/XZ_plane"))
     ROS_WARN_STREAM("Parameter [/task/XZ_plane] not found");
 
+  // // debug
+  // std_srvs::Empty::Request  req;
+  // std_srvs::Empty::Response res;
+  // SrvReadMotionPlan(req, res);
   return true;
 }
 
@@ -76,18 +80,22 @@ bool Tracking2DTaskServer::hostServices() {
 
 bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
-  std::cout << "[Tracking2DTaskServer] Reading data from " << _data_folder_path
-      + _data_filename << std::endl;
+  std::string file = _data_folder_path + _data_filename;
+  std::cout << "[Tracking2DTaskServer] Reading data from " << file << std::endl;
   std::fstream fin;
-  fin.open(_data_folder_path + _data_filename, std::ios::in);
+  fin.open(file);
+  if (!fin.is_open()) {
+    std::cout << "unable to open file!!" << std::endl;
+    std::cerr << "Error: " << std::strerror(errno);
+    exit(-1);
+  }
 
   std::vector<VectorXd> one_traj;
   std::vector<std::string> row;
-  std::string line, word, temp;
-  while (fin >> temp) {
+  std::string line, word;
+  while (getline(fin, line)) {
     row.clear();
     // Read a row
-    getline(fin, line);
     std::stringstream s(line);
     while (getline(s, word, ',')) {
       row.push_back(word);
@@ -114,9 +122,9 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
       _contact_normal_disengaging.push_back(vec);
     } else {
       // add new line of data
-      VectorXd vec(16);
-      for (int i = 0; i < 16; ++i) {
-        vec(i) = std::stof(row[i+1]);
+      VectorXd vec(17);
+      for (int i = 0; i < 17; ++i) {
+        vec(i) = std::stof(row[i]);
       }
       one_traj.push_back(vec);
     }
@@ -128,6 +136,12 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
   _motion_plans.push_back(one_traj_eigen);
   _traj_piece_count = 0;
   fin.close();
+
+  std::cout << "_motion_plans: " << _motion_plans.size() << std::endl;
+  std::cout << "_contact_normal_engaging: " << _contact_normal_engaging.size() << std::endl;
+  std::cout << "_contact_normal_disengaging: " << _contact_normal_disengaging.size() << std::endl;
+  std::cout << "motion plan 1:\n" << _motion_plans[0] << std::endl;
+  std::cout << "[Tracking2DTaskServer] data is loaded. " << std::endl;
   return true;
 }
 
@@ -139,6 +153,7 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
   if (_traj_piece_count >= _motion_plans.size()) {
     std::cout << "[Tracking2DTaskServer] The plan is already finished."
         " Do nothing." << std::endl;
+    return false;
   }
   int NFrames = _motion_plans[_traj_piece_count].rows();
 
@@ -183,7 +198,7 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
      */
     // dimensions
     int n_af = action_n_af;
-    int n_av = action_n_av + 4;
+    int n_av = action_n_av + 3;
     // Compute Pose command
     // 1. Compute the generalized velocity
     Matrix3d R_inv = R_a.inverse();
@@ -198,22 +213,25 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     if (_XZ_plane) {
       V6_T(0) = V3_T(0); // toolX = 2D x
       V6_T(2) = V3_T(1); // toolZ = 2D y
-      V6_T(3) = - V3_T(2); // toolRy = - 2D R
+      V6_T(4) = - V3_T(2); // toolRy = - 2D R
     } else {
       V6_T(1) = V3_T(0); // toolY = 2D x
       V6_T(2) = V3_T(1); // toolZ = 2D y
       V6_T(3) = V3_T(2); // toolRx = 2D R
     }
+    // std::cout << "R_a:\n" << R_a << std::endl;
+    // std::cout << "w_av: " << w_av.transpose() << std::endl;
+    // std::cout << "V3_T: " << V3_T.transpose() << std::endl;
+    // std::cout << "V6_T: " << V6_T.transpose() << std::endl;
     assert(fabs(V6_T(3)) < 1e-7); // it should not rotate
     // 3. Transform to world frame velocity
     Matrix6d Adj_WT = RUT::SE32Adj(SE3_WT_fb);
     VectorXd V_W = Adj_WT * V6_T;
-    assert(fabs(V_W(0)) < 1e-7);
-    cout << " World frame velocity: " << V_W.format(MatlabFmt) << endl;
+    V_W.normalize();
+    cout << " World frame velocity: " << V_W.transpose().format(MatlabFmt) << endl;
     double pose_set[7];
     _robot.getPose(pose_set); // get quaternion
     // 4. Decide how far to move: move closest to the target WT
-    V_W.normalize();
     double dist0 = 999, dist1;
     Vector3d p_WT_target;
     p_WT_target << pose[0], pose[1], pose[2];
@@ -227,6 +245,9 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       if (dist1 > dist0) break;
       dist0 = dist1;
     }
+    // std::cout << "p_WT: " << pose[0] << ", " << pose[1] << ", " << pose[2] << std::endl;
+    // std::cout << "p_WT_goal: " << p_WT_goal.transpose() << std::endl;
+    // std::cout << "p_WT_target: " << p_WT_target.transpose() << std::endl;
     if (count >= max_count - 1) {
       std::cerr << "[Tracking2D] This frame goes too far!!!"
       " _kTransMaxPerFrameMM is violated." << std::endl;
@@ -256,8 +277,10 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
          0   0   0   0   1  0
          0   0   0   0   0  1
        */
-      T_T.block<3, 3>(0, 1) = R_a;
-      T_T(3, 0) = 1;
+      T_T.block<3, 1>(0, 0) = R_a.leftCols(1);
+      T_T.block<3, 1>(0, 2) = R_a.middleCols(1,1);
+      T_T.block<3, 1>(0, 3) = - R_a.rightCols(1);
+      T_T(3, 1) = 1;
       T_T(4, 4) = 1;
       T_T(5, 5) = 1;
     } else {
@@ -283,33 +306,44 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     F_command << eta_af, VectorXd::Zero(action_n_av);
     Vector3d F3_T = R_inv * F_command;
     VectorXd F6_T(6);
-    F6_T(1) = F3_T(0); // toolY = 2D x
-    F6_T(2) = F3_T(1); // toolZ = 2D y
-    F6_T(3) = F3_T(2); // toolRx = 2D R
+    if (_XZ_plane) {
+      F6_T(0) = F3_T(0); // toolX = 2D x
+      F6_T(2) = F3_T(1); // toolZ = 2D y
+      F6_T(4) = -F3_T(2); // toolRy = - 2D R
+    } else {
+      F6_T(1) = F3_T(0); // toolY = 2D x
+      F6_T(2) = F3_T(1); // toolZ = 2D y
+      F6_T(3) = F3_T(2); // toolRx = 2D R
+    }
     assert(fabs(F6_T(3)) < 1e-7); // it should not rotate
-    Matrix6d Adj_TW = RUT::SE32Adj(RUT::SE3Inv(SE3_WT_fb));
-    Vector6d F_W = Adj_TW.transpose() * F6_T;
-    assert(fabs(F_W(0)) < 1e-7);
-    cout << " World frame wrench: " << F_W.format(MatlabFmt) << endl;
+    // Matrix6d Adj_TW = RUT::SE32Adj(RUT::SE3Inv(SE3_WT_fb));
+    // Vector6d F_W = Adj_TW.transpose() * F6_T;
+    cout << " Tool frame wrench: " << F6_T.transpose().format(MatlabFmt) << endl;
     cout << "Change of pose: " << pose_set[0] - pose[0] << ", "
         << pose_set[1] - pose[1] << ", "
         << pose_set[2] - pose[2] << endl;
     cout << "Duration: " << duration_s << " sec" << std::endl;
     /*  Execute the hybrid action */
-    cout << "[Tracking2D] Press Enter to move\n";
-    getchar();
+    // cout << "[Tracking2D] Press Enter to move\n";
+    // getchar();
     cout << "motion begins:" << endl;
-    if (!_controller.ExecuteHFVC(n_af, n_av, T_T, pose_set, force_set,
+    if (_controller.ExecuteHFVC(n_af, n_av, T_T, pose_set, force_set,
         HS_CONTINUOUS, _main_loop_rate, duration_s)) {
       ROS_WARN_STREAM("[Tracking2DTaskServer] unsafe motion. Stopped prematurely.");
     }
   }
-  _traj_piece_count ++; // advance to the next piece
+  std::cout << "[Tracking2DTaskServer] SrvExecuteTask is done. " << std::endl;
   return true;
 }
 
 bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
+  std::cout << "[Tracking2DTaskServer] Calling SrvEngage. " << std::endl;
+  if (_traj_piece_count >= _motion_plans.size()) {
+    std::cout << "[Tracking2DTaskServer] The plan is already finished, "
+        " or it is not loaded." << std::endl;
+    return false;
+  }
    // read normal
   Eigen::Vector2d v2_W = _contact_normal_engaging[_traj_piece_count];
   v2_W.normalize();
@@ -319,12 +353,11 @@ bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
   } else {
     v3_W << 0, v2_W(0), v2_W(1);
   }
-
   // read initial frame
   Eigen::VectorXd plan = _motion_plans[_traj_piece_count].topRows(1).transpose();
   Vector2d p2_W; // mm
   p2_W << plan(15), plan(16);
-  p2_W += v2_W*30.0;
+  p2_W += v2_W*20.0;
   Vector3d p3_W;
   p3_W << _k2DTo3DOffsetX, _k2DTo3DOffsetY, _k2DTo3DOffsetZ;
   if (_XZ_plane) {
@@ -344,17 +377,18 @@ bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
   pose[1] = p3_W(1);
   pose[2] = p3_W(2);
 
+  std::cout << "engage prepare pose: " << p3_W[0] << ", " << p3_W[1] << ", "
+      << p3_W[2] << std::endl;
+  // std::cout << "Press Enter to begin." << std::endl;
+  // getchar();
   // write to file
   std::ofstream fout;
   fout.open(_data_folder_path + "pose_set.txt", std::ios::out | std::ios::trunc);
   for (int i = 0; i < 7; ++i)
-    fout << pose[i];
+    fout << pose[i] << " ";
   fout.close();
   // call parent MoveUntilTouch
   SrvMoveTool(req, res);
-
-  std::cout << "debug: moved to prepare pose. Press Enter to engage" << std::endl;
-  getchar();
 
   /**
    * Step two: engage
@@ -364,8 +398,14 @@ bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
   fout.open(_data_folder_path + "velocity_set.txt", std::ios::out | std::ios::trunc);
   fout << v3_W(0) << v3_W(1) << v3_W(2);
   fout.close();
+  std::cout << "Engaging direction: " << v3_W.transpose() << std::endl;
+  std::cout << "Press Enter to start" << std::endl;
+  getchar();
+
   // call parent MoveUntilTouch
-  return SrvMoveUntilTouch(req, res);
+  bool flag = SrvMoveUntilTouch(req, res);
+  std::cout << "[Tracking2DTaskServer] SrvEngage is done. " << std::endl;
+  return flag;
 }
 
 bool Tracking2DTaskServer::SrvDisengage(std_srvs::Empty::Request  &req,
@@ -380,11 +420,13 @@ bool Tracking2DTaskServer::SrvDisengage(std_srvs::Empty::Request  &req,
   }
 
   v3_W.normalize();
-  v3_W *= 30; // mm
+  v3_W *= 50; // mm
 
   // compute retract pose
   double pose[7];
   _robot.getPose(pose);
+  std::cout << "current pose: " << pose[0] << ", " << pose[1] << ", " << pose[2] << std::endl;
+  std::cout << "offset: " << v3_W.transpose() << std::endl;
   pose[0] = pose[0] + v3_W(0);
   pose[1] = pose[1] + v3_W(1);
   pose[2] = pose[2] + v3_W(2);
@@ -393,8 +435,10 @@ bool Tracking2DTaskServer::SrvDisengage(std_srvs::Empty::Request  &req,
   std::ofstream fout;
   fout.open(_data_folder_path + "pose_set.txt", std::ios::out | std::ios::trunc);
   for (int i = 0; i < 7; ++i)
-    fout << pose[i];
+    fout << pose[i] << " ";
   fout.close();
   // call parent MoveUntilTouch
-  return SrvMoveTool(req, res);
+  bool result = SrvMoveTool(req, res);
+  _traj_piece_count ++; // advance to the next piece
+  return result;
 }

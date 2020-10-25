@@ -1,6 +1,6 @@
 <launch>
-  <rosparam file="$(find hybrid_servoing)/experiments/levering_up/config/hardware.yaml" command="load"/>
-  <rosparam file="$(find hybrid_servoing)/experiments/levering_up/config/controller.yaml" command="load"/>
-  <rosparam file="$(find hybrid_servoing)/experiments/levering_up/config/task.yaml" command="load"/>
-  <node pkg="hybrid_servoing" name="levering_up_node" type="LeveringUpServerNode"  output="screen" ns="robot_bridge"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/tracking2d/config/hardware.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/tracking2d/config/controller.yaml" command="load"/>
+  <rosparam file="$(find hybrid_servoing)/experiments/tracking2d/config/task.yaml" command="load"/>
+  <node pkg="hybrid_servoing" name="tracking2d_node" type="Tracking2DServerNode"  output="screen" ns="robot_bridge"/>
 </launch>
