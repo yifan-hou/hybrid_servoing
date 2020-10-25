@@ -8,4 +8,4 @@ task:
       y: 325  # mm, offset in world Y direction
       z: 253.3  # mm, 251.4 offset in world Z direction (table top height)
   data_folder_path: "/usr0/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/"
-  data_file_name: "traj_block_tilting.csv"
+  data_file_name: "traj_plastic_cube.csv"
