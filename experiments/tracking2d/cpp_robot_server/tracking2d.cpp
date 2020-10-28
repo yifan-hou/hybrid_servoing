@@ -181,6 +181,21 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       eta_af(i) = plan(12+i);
     for (int i = 0; i < action_n_av; ++i)
       w_av(i) = plan(12+action_n_af+i);
+    // debug hack
+    // make the plan purely translational
+    // 1. force (assume 2d)
+    Eigen::Vector3d sum = (R_a.topRows(1)*eta_af(0) + R_a.middleRows(1,1)*eta_af(1)).transpose();
+    sum(2) = 0; // rotational force set to zero
+    eta_af(0) = sum(2);
+    eta_af(1) = sum.head(2).norm();
+    R_a(0,0) = 0;
+    R_a(0,1) = 0;
+    R_a(0,2) = 1;
+    R_a.middleRows(1,1) = sum.normalized().transpose();
+    // 2. velocity (assume 1d)
+    Eigen::Vector3d v_row = R_a.bottomRows(1).transpose();
+    v_row(2) = 0;
+    R_a.bottomRows(1) = v_row.normalized().transpose();
 
     Vector3d p_WT_goal; // mm
     p_WT_goal << _k2DTo3DOffsetX, _k2DTo3DOffsetY, _k2DTo3DOffsetZ;
@@ -210,6 +225,8 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     //  Here I assume toolZ points upwards, the three planar axes are
     //   [toolY, toolZ, toolRX]
     VectorXd V6_T = VectorXd::Zero(6); // meter/s
+    // // debug hack
+    // V3_T(2) = 0;
     if (_XZ_plane) {
       V6_T(0) = V3_T(0); // toolX = 2D x
       V6_T(2) = V3_T(1); // toolZ = 2D y
@@ -223,7 +240,8 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     std::cout << "w_av: " << w_av.transpose() << std::endl;
     std::cout << "V3_T: " << V3_T.transpose() << std::endl;
     std::cout << "V6_T: " << V6_T.transpose() << std::endl;
-    assert(fabs(V6_T(3)) < 1e-7); // it should not rotate
+    assert(fabs(V3_T(2)) < 1e-7); // it should not rotate
+
     // 3. Transform to world frame velocity
     Matrix6d Adj_WT = RUT::SE32Adj(SE3_WT_fb); // meter/s
     VectorXd V_W = Adj_WT * V6_T; // unitless
@@ -306,6 +324,10 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     F_command << eta_af, VectorXd::Zero(action_n_av);
     Vector3d F3_T = R_inv * F_command;
     VectorXd F6_T(6);
+    // // debug hack
+    // // ignore rotation
+    // F3_T(2) = 0;
+    assert(fabs(F3_T(2)) < 1e-7); // it should not rotate
     if (_XZ_plane) {
       F6_T(0) = F3_T(0); // toolX = 2D x
       F6_T(2) = F3_T(1); // toolZ = 2D y
@@ -315,7 +337,6 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
       F6_T(2) = F3_T(1); // toolZ = 2D y
       F6_T(3) = F3_T(2); // toolRx = 2D R
     }
-    assert(fabs(F6_T(3)) < 1e-7); // it should not rotate
     // Matrix6d Adj_TW = RUT::SE32Adj(RUT::SE3Inv(SE3_WT_fb));
     // Vector6d F_W = Adj_TW.transpose() * F6_T;
     cout << " Tool frame wrench: " << F6_T.transpose().format(MatlabFmt) << endl;
