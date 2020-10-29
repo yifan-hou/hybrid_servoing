@@ -52,7 +52,7 @@ bool Tracking2DTaskServer::initTracking2DTaskServer() {
   if (!_ros_handle_p->hasParam("/task/XZ_plane"))
     ROS_WARN_STREAM("Parameter [/task/XZ_plane] not found");
 
-  // // debug
+  // // debug readMotionPlan
   // std_srvs::Empty::Request  req;
   // std_srvs::Empty::Response res;
   // SrvReadMotionPlan(req, res);
@@ -94,6 +94,7 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
   std::vector<VectorXd> one_traj;
   std::vector<std::string> row;
   std::string line, word;
+  int counter = 0;
   while (getline(fin, line)) {
     row.clear();
     // Read a row
@@ -101,8 +102,11 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
     while (getline(s, word, ',')) {
       row.push_back(word);
     }
+    std::cout << "line " << ++counter << ", size " << row.size() << std::endl;
+    std::cout << "contents: " << line << std::endl;
+    std::cout << "reads: ";
     // check whether to start a new trajectory or not
-    double stability_margin = std::stof(row[0]);
+    double stability_margin = std::stod(row[0]);
     if (stability_margin < 0) {
       // save this trajectory
       assert(one_traj.size() > 0);
@@ -112,11 +116,12 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
       }
       _motion_plans_m.push_back(one_traj_eigen);
       Eigen::Vector2d vec;
-      vec(0) = std::stof(row[1]);
-      vec(1) = std::stof(row[2]);
+      std::cout << " Info line. " << row[1] << ", " << row[2] << ", " << row[3] << ", " << row[4];
+      vec(0) = std::stod(row[1]);
+      vec(1) = std::stod(row[2]);
       _contact_normal_engaging.push_back(-vec);
-      vec(0) = std::stof(row[3]);
-      vec(1) = std::stof(row[4]);
+      vec(0) = std::stod(row[3]);
+      vec(1) = std::stod(row[4]);
       _contact_normal_disengaging.push_back(-vec);
       // start a new trajectory
       one_traj.clear();
@@ -124,10 +129,12 @@ bool Tracking2DTaskServer::SrvReadMotionPlan(std_srvs::Empty::Request  &req,
       // add new line of data
       VectorXd vec(17);
       for (int i = 0; i < 17; ++i) {
-        vec(i) = std::stof(row[i]);
+        std::cout << row[i] << ", ";
+        vec(i) = std::stod(row[i]);
       }
       one_traj.push_back(vec);
     }
+    std::cout << std::endl;
   } // end while loop
   if (one_traj.size() > 0) {
     std::cerr << "[Tracking2DTaskServer::SrvReadMotionPlan] Wrong data format! "

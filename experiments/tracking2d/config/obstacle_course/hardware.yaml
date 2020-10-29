@@ -4,7 +4,7 @@ robot:
   safety_mode: 1 # 0: none 1: truncate 2: stop
   operation_mode: 0 # 0: cartesian 1: joint
   safe_zone:
-    xmin: -60
+    xmin: -120
     xmax: 220
     ymin: 220
     ymax: 520
