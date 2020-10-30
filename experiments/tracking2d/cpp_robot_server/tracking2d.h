@@ -43,6 +43,7 @@ private:
   double _k2DTo3DOffsetX;
   double _k2DTo3DOffsetY;
   double _k2DTo3DOffsetZ;
+  double _kRoundFingerCompensation;
   std::string _data_folder_path;
   std::string _data_filename;
   bool _XZ_plane;
@@ -52,5 +53,6 @@ private:
   std::vector<Eigen::Vector2d> _contact_normal_disengaging;
   // internal data
   int _traj_piece_count;
+  double _round_finger_compensation;
   // misc
 };

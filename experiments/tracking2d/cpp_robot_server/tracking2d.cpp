@@ -43,6 +43,10 @@ bool Tracking2DTaskServer::initTracking2DTaskServer() {
   if (!_ros_handle_p->hasParam("/task/plan_offset/z"))
     ROS_WARN_STREAM("Parameter [/task/plan_offset/z] not found");
 
+  _ros_handle_p->param(std::string("/task/round_finger_compensation"), _kRoundFingerCompensation, 0.0);
+  if (!_ros_handle_p->hasParam("/task/round_finger_compensation"))
+    ROS_WARN_STREAM("Parameter [/task/round_finger_compensation] not found");
+
   _ros_handle_p->param(std::string("/task/data_folder_path"), _data_folder_path, std::string());
   if (!_ros_handle_p->hasParam("/task/data_folder_path"))
     ROS_WARN_STREAM("Parameter [/task/data_folder_path] not found");
@@ -209,10 +213,10 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     Vector3d p_WT_goal; // mm
     p_WT_goal << _k2DTo3DOffsetX, _k2DTo3DOffsetY, _k2DTo3DOffsetZ;
     if (_XZ_plane) {
-      p_WT_goal[0] += plan(15)*1000.0;
+      p_WT_goal[0] += plan(15)*1000.0 + _round_finger_compensation;
       p_WT_goal[2] += plan(16)*1000.0;
     } else {
-      p_WT_goal[1] += plan(16)*1000.0;
+      p_WT_goal[1] += plan(16)*1000.0 + _round_finger_compensation;
       p_WT_goal[2] += plan(16)*1000.0;
     }
 
@@ -388,11 +392,11 @@ bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
    // read normal
   Eigen::Vector2d v2_W = _contact_normal_engaging[_traj_piece_count];
   v2_W.normalize();
-  Eigen::Vector3d v3_W;
-  if (_XZ_plane) {
-    v3_W << v2_W(0), 0, v2_W(1);
+  if (v2_W(1) < 0.01) {
+    // the normal is horizontal. apply round finger compensation
+    _round_finger_compensation = _kRoundFingerCompensation*v2_W(0);
   } else {
-    v3_W << 0, v2_W(0), v2_W(1);
+    _round_finger_compensation = 0;
   }
   // read initial frame
   Eigen::VectorXd plan = _motion_plans_m[_traj_piece_count].topRows(1).transpose();
@@ -400,6 +404,8 @@ bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
   p2_W << plan(15), plan(16);
   p2_W *= 1000.0;
   p2_W += v2_W*20.0;
+  p2_W(0) += _round_finger_compensation;
+
   Vector3d p3_W;
   p3_W << _k2DTo3DOffsetX, _k2DTo3DOffsetY, _k2DTo3DOffsetZ;
   if (_XZ_plane) {
