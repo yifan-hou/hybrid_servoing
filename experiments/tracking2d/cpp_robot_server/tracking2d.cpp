@@ -3,6 +3,8 @@
 #include <fstream>
 #include <RobotUtilities/utilities.h>
 #include <RobotUtilities/TimerLinux.h>
+#include <chrono>
+#include <thread>
 
 #define PI 3.14159265
 
@@ -276,6 +278,9 @@ bool Tracking2DTaskServer::SrvExecuteTask(std_srvs::Empty::Request  &req,
     if (count >= max_count - 1) {
       std::cerr << "[Tracking2D] This frame goes too far!!!"
       " _kTransMaxPerFrameMM is violated." << std::endl;
+      std::cerr << "p_WT_now: " << pose[0] << ", " << pose[1] << ", " << pose[2] << std::endl;
+      std::cerr << "p_WT_goal: " << p_WT_goal.transpose() << std::endl;
+      std::cerr << "p_WT_target: " << p_WT_target.transpose() << std::endl;
       exit(-1);
     }
     double duration_s = count * _kTransResMM / _kTransVelMM;
@@ -377,6 +382,9 @@ bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
         " or it is not loaded." << std::endl;
     return false;
   }
+  /**
+   * Motion One: move to 50mm above pre-engage pose
+   */
    // read normal
   Eigen::Vector2d v2_W = _contact_normal_engaging[_traj_piece_count];
   v2_W.normalize();
@@ -406,14 +414,27 @@ bool Tracking2DTaskServer::SrvPreEngage(std_srvs::Empty::Request  &req,
   _robot.getPose(pose); // get orientaton
   pose[0] = p3_W(0);
   pose[1] = p3_W(1);
-  pose[2] = p3_W(2);
+  pose[2] = p3_W(2) + 50;
 
-  std::cout << "engage prepare pose: " << p3_W[0] << ", " << p3_W[1] << ", "
-      << p3_W[2] << std::endl;
-  // std::cout << "Press Enter to begin." << std::endl;
-  // getchar();
-  // write to file
+  std::cout << "engage pre-prepare pose: " << pose[0] << ", " << pose[1] << ", "
+      << pose[2] << std::endl;
   std::ofstream fout;
+  fout.open(_data_folder_path + "pose_set.txt", std::ios::out | std::ios::trunc);
+  for (int i = 0; i < 7; ++i)
+    fout << pose[i] << " ";
+  fout.close();
+  // call parent MoveUntilTouch
+  if(!SrvMoveTool(req, res)) {
+    return false;
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+  /**
+   * Motion two: move down to pre-engage pose
+   */
+  pose[2] = p3_W(2);
+  std::cout << "engage prepare pose: " << pose[0] << ", " << pose[1] << ", "
+      << pose[2] << std::endl;
   fout.open(_data_folder_path + "pose_set.txt", std::ios::out | std::ios::trunc);
   for (int i = 0; i < 7; ++i)
     fout << pose[i] << " ";
@@ -456,6 +477,10 @@ bool Tracking2DTaskServer::SrvEngage(std_srvs::Empty::Request  &req,
 
 bool Tracking2DTaskServer::SrvDisengage(std_srvs::Empty::Request  &req,
     std_srvs::Empty::Response &res) {
+  /**
+   * Motion one: disengage
+   */
+
   // read normal
   Eigen::Vector2d v2_W = _contact_normal_disengaging[_traj_piece_count];
   Eigen::Vector3d v3_W;
@@ -484,7 +509,25 @@ bool Tracking2DTaskServer::SrvDisengage(std_srvs::Empty::Request  &req,
     fout << pose[i] << " ";
   fout.close();
   // call parent MoveUntilTouch
+  if(!SrvMoveTool(req, res)) {
+    return false;
+  }
+
+  /**
+   * Motion two: retract in +Z
+   */
+  // compute retract pose
+  _robot.getPose(pose);
+  pose[2] = pose[2] + 50;
+
+  // write to file
+  fout.open(_data_folder_path + "pose_set.txt", std::ios::out | std::ios::trunc);
+  for (int i = 0; i < 7; ++i)
+    fout << pose[i] << " ";
+  fout.close();
+  // call parent MoveUntilTouch
   bool result = SrvMoveTool(req, res);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   _traj_piece_count ++; // advance to the next piece
   return result;
 }

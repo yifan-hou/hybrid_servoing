@@ -5,7 +5,7 @@ robot:
   operation_mode: 0 # 0: cartesian 1: joint
   safe_zone:
     xmin: -120
-    xmax: 220
+    xmax: 260
     ymin: 220
     ymax: 520
     zmin: 260 # table is at 251.4

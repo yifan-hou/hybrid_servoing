@@ -15,7 +15,7 @@ force_control:
   #   Inertia matrix as viewed in tool frame
   Inertia_matrix_diag_elements: [2, 2, 2, 0.02, 0.02, 0.02]
   #   Damping coefficient matrix as viewed in tool frame
-  Damping_matrix_diag_elements: [40, 40, 40, 0.8, 0.8, 0.8]
+  Damping_matrix_diag_elements: [40, 40, 60, 0.8, 0.8, 0.8]
   # Force control PID Gains
   # one set for translation, another set for rotation
   FC_gains:
@@ -48,9 +48,9 @@ robot_bridge:
   velocity_set_file_path: "/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/velocity_set.txt"
   pose_feedback_file_path: "/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/pose_feedback.txt"
   task_data_file_path: "/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/"
-  test_mode: true # test_mode: pause before every motion command
+  test_mode: false # test_mode: pause before every motion command
   default_pose: # when tool frame is set for probe
-    x: 0
+    x: 150
     y: 325
     z: 416
     qw: 1

@@ -1,11 +1,11 @@
 task:
   translation_resolution: 0.1 # mm, threshold for moving on to next frame
   translation_velocity: 5 # 5 mm/s
-  max_trans_per_frame: 10 # mm, stop the program if a frame is too far away
+  max_trans_per_frame: 20 # mm, stop the program if a frame is too far away
   XZ_plane: true # where to put the plane in 3D space. true: XZ plane. False: YZ plane.
   plan_offset: # 2D plan + offset = 3D plan
       x: 68  # 73.7 mm, offset in world X direction
       y: 353  # mm, offset in world Y direction
-      z: 174.0  # mm, offset in world Z direction (table top height)
+      z: 168.0  # 174 mm, offset in world Z direction (table top height)
   data_folder_path: "/usr0/home/yifanh/Git/catkin_ws/src/hybrid_servoing/experiments/tracking2d/data/"
   data_file_name: "traj_obstacle_course.csv"
